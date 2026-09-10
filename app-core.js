@@ -141,10 +141,14 @@ async function loadCSV(file, lsKey, fallback) {
     lsSet(lsKey, text); return text;
   } catch (e) { return lsGet(lsKey) || fallback; }
 }
-/** ลายเซ็น: ใช้ไฟล์ใน signatures/ ก่อน ถ้าไม่มีไฟล์ใช้ข้อมูล base64 จาก signatures.json */
+/** ลายเซ็น: ใช้ไฟล์ใน signatures/ ก่อน ถ้าไม่มีไฟล์ใช้ข้อมูล base64 จาก signatures.json (ค่าเป็นสตริงเดียว หรืออาร์เรย์ของท่อนสตริงที่นำมาต่อกัน) */
 async function loadSigMap() {
-  try { const res = await fetch('signatures.json?v=' + Date.now(), { cache: 'no-store' }); if (!res.ok) throw new Error(res.status); const map = await res.json(); lsSet(LS.sigmap, JSON.stringify(map)); return map; }
-  catch (e) { return JSON.parse(lsGet(LS.sigmap) || '{}'); }
+  try {
+    const res = await fetch('signatures.json?v=' + Date.now(), { cache: 'no-store' }); if (!res.ok) throw new Error(res.status);
+    const map = await res.json();
+    Object.keys(map).forEach(k => { if (Array.isArray(map[k])) map[k] = map[k].join(''); });
+    lsSet(LS.sigmap, JSON.stringify(map)); return map;
+  } catch (e) { return JSON.parse(lsGet(LS.sigmap) || '{}'); }
 }
 async function resolveSig(path, map) {
   if (!path) return '';
