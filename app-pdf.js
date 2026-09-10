@@ -137,7 +137,7 @@ async function approve() {
       by: m.who.nick, fullName: m.who.fullName, dept: m.who.dept, date: m.date, amount: m.amount,
       category: m.cat.name, folder: m.cat.folder, hasReceipt: m.hasReceipt, desc: m.desc, vendor: m.vendor, pay: m.pay, note: m.note,
       coverType: m.hasReceipt ? '' : m.coverType + (m.ctDetail ? ': ' + m.ctDetail : ''), approver: m.approver.fullName || m.approver.nick,
-      pages: state.pdf.pages, pdf: { data: state.pdf.data },
+      slip: m.slip || {}, pages: state.pdf.pages, pdf: { data: state.pdf.data },
     }, { timeout: 180000 });
     const e = res.entry; state.recent.unshift(e); lsDel(LS.boot);
     $('doneId').textContent = e.id; $('doneSub').textContent = 'เก็บใน Drive · บันทึกลงชีต ' + (e.sheet || e.period || m.date.slice(0, 7)) + ' · สถานะ "รอตรวจ"';
@@ -152,6 +152,7 @@ function resetEntry(keepWho) {
   ['amount', 'date', 'vendor', 'desc', 'note', 'bdate', 'bvendor', 'ctDetail', 'bnote'].forEach(id => { $(id).value = ''; $(id).classList.remove('ai', 'bad'); });
   $$('#step2 .choice, #catList button').forEach(b => b.classList.remove('on'));
   $('aiBanner').innerHTML = ''; $('aiBannerB').innerHTML = ''; $('pv').innerHTML = '';
+  if (typeof clearSlip === 'function') clearSlip();
   goStep(keepWho ? 2 : 1);
 }
 
