@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="TESR Ledger">
+<title>TESR Ledger — บันทึกรายจ่าย</title>
+<link rel="icon" id="favicon" href="logo-192.png">
+<link rel="apple-touch-icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="styles.css?v=2.1.0">
+</head>
+<body>
+<header>
+  <div class="hdr">
+    <img id="hdrLogo" alt="TESR">
+    <div><div class="t">TESR LEDGER</div><div class="s" id="hdrSub">บันทึกรายจ่าย</div></div>
+    <div class="sp"></div>
+    <span class="dot" id="syncDot" title="สถานะการเชื่อมต่อ"></span>
+    <button class="icon" type="button" id="btnSettings" title="ตั้งค่า">⚙</button>
+  </div>
+  <div class="stepper" id="stepper">
+    <div data-s="1">1 · ใคร</div><div data-s="2">2 · ใบเสร็จ</div><div data-s="3">3 · หมวด</div><div data-s="4">4 · รายละเอียด</div><div data-s="5">5 · ตรวจ</div>
+  </div>
+</header>
+
+<main>
+<!-- ================= LOGIN GATE ================= -->
+<section class="view" id="view-login">
+  <div class="gate">
+    <img id="gateLogo" alt="TESR">
+    <h1>TESR Ledger</h1>
+    <p>เข้าสู่ระบบด้วยบัญชี Google ของบริษัทที่ได้รับอนุญาตก่อนใช้งาน</p>
+    <div class="gbtn" id="gsiBtn"></div>
+    <div id="gateMsg"></div>
+  </div>
+</section>
+
+<!-- ================= WIZARD ================= -->
+<section class="view" id="view-wiz">
+  <div id="setupBanner"></div>
+
+  <!-- STEP 1: who -->
+  <div class="step" id="step1">
+    <h1>ใครเป็นคนบันทึก<small>แตะชื่อของคุณ — ชื่อนี้จะอยู่ในเอกสาร ชีต และชื่อไฟล์</small></h1>
+    <div class="card">
+      <div class="who" id="whoGrid"></div>
+      <div id="otherBox" class="hidden">
+        <div class="row mt">
+          <div><label class="lbl req" for="oName">ชื่อ-นามสกุล</label><input class="field" id="oName" placeholder="เช่น นาย สมชาย ใจดี" autocomplete="name"></div>
+          <div><label class="lbl req" for="oDept">แผนก</label><input class="field" id="oDept" placeholder="เช่น Engineer / Admin / Intern" list="deptList"><datalist id="deptList"></datalist></div>
+        </div>
+      </div>
+      <div id="sigBox" class="mt hidden">
+        <label class="lbl">ลายเซ็นผู้ขอเบิก <span class="muted" id="sigHint"></span></label>
+        <div id="sigHave" class="sigimg hidden"><img id="sigHaveImg" alt="ลายเซ็น"></div>
+        <div id="sigPadWrap" class="hidden">
+          <div class="sigwrap"><canvas id="sigPad"></canvas></div>
+          <p class="hint">เซ็นด้วยนิ้วในกรอบสีขาว หรืออัปโหลดรูปลายเซ็น (พื้นขาว/พื้นโปร่ง)</p>
+        </div>
+        <div class="btnrow">
+          <button class="btn btn-ghost btn-sm" type="button" id="btnSigDraw">วาดลายเซ็น</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="btnSigUpload">อัปโหลดรูป</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="btnSigClear">ล้าง</button>
+          <input type="file" id="sigFile" accept="image/*" hidden>
+        </div>
+      </div>
+    </div>
+    <p class="hint">รายชื่อมาจากไฟล์ <span class="mono">staff.csv</span> ใน GitHub — แก้ชื่อ แผนก หรือลายเซ็นได้ที่นั่นโดยตรง</p>
+  </div>
+
+  <!-- STEP 2: receipt? -->
+  <div class="step" id="step2">
+    <h1>มีใบเสร็จไหม<small>ใบเสร็จ ใบกำกับภาษี บิลเงินสด หรือใบแจ้งหนี้ที่ระบุผู้ขาย</small></h1>
+    <div class="big">
+      <button class="choice" type="button" data-r="yes"><span class="ic">🧾</span><b>มีใบเสร็จ</b><span>ถ่ายใบเสร็จ + แนบสลิปโอน แล้วเลือกหมวด — ระบบรวมเป็น PDF เก็บเข้าโฟลเดอร์ให้</span></button>
+      <button class="choice" type="button" data-r="no"><span class="ic">📝</span><b>ไม่มีใบเสร็จ</b><span>กรอกใบปะหน้า (เอกสารประกอบการเบิก) ระบุหมวดและใช้กับอะไร + แนบสลิป/หลักฐานจ่าย</span></button>
+    </div>
+  </div>
+
+  <!-- STEP 3: category -->
+  <div class="step" id="step3">
+    <h1>หมวดหมู่<small>เลือกโฟลเดอร์ที่เอกสารนี้จะไปอยู่ใน Google Drive</small></h1>
+    <div class="cat" id="catList"></div>
+    <p class="hint">หมวดหมู่มาจากไฟล์ <span class="mono">categories.csv</span> ใน GitHub — เพิ่ม/แก้ได้ที่นั่น</p>
+  </div>
+
+  <!-- STEP 4: details -->
+  <div class="step" id="step4">
+    <h1 id="s4Title">รายละเอียด<small id="s4Sub"></small></h1>
+
+    <!-- 4A: has receipt -->
+    <div id="s4a" class="hidden">
+      <div class="card">
+        <h2>1 · ใบเสร็จ</h2>
+        <div class="att"><button type="button" data-cam="receipt"><b>📷</b><span>ถ่ายใบเสร็จ</span></button><button type="button" data-file="receipt"><b>📁</b><span>เลือกไฟล์ (รูป / PDF)</span></button></div>
+        <div class="thumbs" id="th-receipt"></div>
+      </div>
+      <div class="card">
+        <h2>2 · สลิป / หลักฐานการจ่าย ที่เห็นยอดเป็นบาท</h2>
+        <p class="hint" style="margin:0 0 10px">สลิปธนาคาร พร้อมเพย์ รายการเดินบัญชี หรือยอดตัดบัตร — ต้องเห็นตัวเลข ฿ ชัดเจน</p>
+        <div class="att"><button type="button" data-cam="pay"><b>📷</b><span>ถ่ายสลิป</span></button><button type="button" data-file="pay"><b>📁</b><span>เลือกไฟล์อัปโหลด</span></button></div>
+        <div class="thumbs" id="th-pay"></div>
+        <div class="aistat" id="aiStat"></div><div id="aiBanner"></div>
+      </div>
+      <div class="card">
+        <h2>3 · หลักฐานตอนโอนเป็นสกุลต่างประเทศ (USD / RMB) — ถ้ามี</h2>
+        <p class="hint" style="margin:0 0 10px">หน้า Payment Successful ของ Alipay / PayPal / บัตร ที่เป็น ¥ หรือ $ เพื่อให้เห็นทั้งตอนโอนและตอนแปลงเป็นบาทแล้ว</p>
+        <div class="att"><button type="button" data-cam="fx"><b>📷</b><span>ถ่ายหน้าจอ</span></button><button type="button" data-file="fx"><b>📁</b><span>เลือกไฟล์อัปโหลด</span></button></div>
+        <div class="thumbs" id="th-fx"></div>
+      </div>
+      <div class="card">
+        <h2>4 · ข้อมูล</h2>
+        <div class="row">
+          <div><label class="lbl req" for="amount">จำนวนเงิน (บาท)</label><input class="field" id="amount" type="text" inputmode="decimal" placeholder="0.00"></div>
+          <div><label class="lbl req" for="date">วันที่จ่าย</label><input class="field" id="date" type="date"></div>
+        </div>
+        <div class="mt"><label class="lbl" for="vendor">ร้าน / ผู้รับเงิน / แพลตฟอร์ม</label><input class="field" id="vendor" placeholder="เช่น Kerry Express, Shopee ร้าน ABC, Taobao" autocomplete="off"></div>
+        <div class="mt"><label class="lbl" for="desc">ซื้ออะไร / ใช้กับอะไร</label><input class="field" id="desc" placeholder="เช่น สายไฟ 20 เมตร ใช้ในงาน Iron-X"></div>
+        <div class="mt"><label class="lbl req">จ่ายด้วย</label><div class="chips" id="payChips"><button class="chip" type="button" data-p="บริษัท">เงิน/บัตรบริษัท</button><button class="chip" type="button" data-p="ส่วนตัว (ขอเบิกคืน)">เงินส่วนตัว — ขอเบิกคืน</button></div></div>
+        <div class="mt"><label class="lbl" for="note">หมายเหตุถึงบัญชี</label><input class="field" id="note" placeholder="(ถ้ามี)"></div>
+      </div>
+    </div>
+
+    <!-- 4B: no receipt = cover sheet -->
+    <div id="s4b" class="hidden">
+      <div class="card">
+        <h2>1 · ใบปะหน้า (เอกสารประกอบการเบิกค่าใช้จ่าย)</h2>
+        <div class="row">
+          <div><label class="lbl req" for="bdate">วันที่จ่าย</label><input class="field" id="bdate" type="date"></div>
+          <div><label class="lbl" for="bvendor">ร้าน / แพลตฟอร์ม / ผู้รับเงิน</label><input class="field" id="bvendor" placeholder="เช่น Taobao, ร้านตลาดคลองถม" autocomplete="off"></div>
+        </div>
+        <div class="mt"><label class="lbl req">ประเภทค่าใช้จ่าย</label>
+          <div class="chips" id="ctChips"><button class="chip" type="button" data-t="ค่าพาหนะ">ค่าพาหนะ</button><button class="chip" type="button" data-t="ค่าสินค้าและบริการ">ค่าสินค้าและบริการ</button><button class="chip" type="button" data-t="อื่นๆ">อื่นๆ</button></div>
+        </div>
+        <div class="mt"><label class="lbl req" id="ctLbl" for="ctDetail">สาเหตุที่ไม่มีใบเสร็จ</label><input class="field" id="ctDetail" placeholder=""></div>
+      </div>
+      <div class="card">
+        <h2>2 · รายการค่าใช้จ่าย</h2>
+        <div class="items" id="items"></div>
+        <button class="add" type="button" id="btnAddItem">+ เพิ่มรายการ</button>
+        <div class="total"><span>รวมจำนวนเงิน</span><b id="itemsTotal">฿0.00</b></div>
+      </div>
+      <div class="card">
+        <h2>3 · สลิป / หลักฐานการจ่าย ที่เห็นยอดเป็นบาท</h2>
+        <p class="hint" style="margin:0 0 10px">สลิปธนาคาร พร้อมเพย์ รายการเดินบัญชี หรือยอดตัดบัตร — ต้องเห็นตัวเลข ฿ ชัดเจน</p>
+        <div class="att"><button type="button" data-cam="pay"><b>📷</b><span>ถ่ายสลิป</span></button><button type="button" data-file="pay"><b>📁</b><span>เลือกไฟล์อัปโหลด</span></button></div>
+        <div class="thumbs" id="th-pay-b"></div>
+        <div class="aistat" id="aiStatB"></div><div id="aiBannerB"></div>
+      </div>
+      <div class="card">
+        <h2>4 · หลักฐานตอนโอนเป็นสกุลต่างประเทศ (USD / RMB) — ถ้ามี</h2>
+        <p class="hint" style="margin:0 0 10px">หน้า Payment Successful ของ Alipay / PayPal / บัตร ที่เป็น ¥ หรือ $ เพื่อให้เห็นทั้งตอนโอนและตอนแปลงเป็นบาทแล้ว</p>
+        <div class="att"><button type="button" data-cam="fx"><b>📷</b><span>ถ่ายหน้าจอ</span></button><button type="button" data-file="fx"><b>📁</b><span>เลือกไฟล์อัปโหลด</span></button></div>
+        <div class="thumbs" id="th-fx-b"></div>
+      </div>
+      <div class="card">
+        <h2>5 · รูปสินค้า / หลักฐานอื่น (ถ้ามี)</h2>
+        <div class="att"><button type="button" data-cam="other"><b>📷</b><span>ถ่ายรูป</span></button><button type="button" data-file="other"><b>📁</b><span>เลือกไฟล์ (รูป / PDF)</span></button></div>
+        <div class="thumbs" id="th-other"></div>
+      </div>
+      <div class="card">
+        <h2>6 · จ่ายด้วย</h2>
+        <div class="chips" id="payChipsB"><button class="chip" type="button" data-p="ส่วนตัว (ขอเบิกคืน)">เงินส่วนตัว — ขอเบิกคืน</button><button class="chip" type="button" data-p="บริษัท">เงิน/บัตรบริษัท</button></div>
+        <div class="mt"><label class="lbl" for="bnote">หมายเหตุถึงบัญชี</label><input class="field" id="bnote" placeholder="(ถ้ามี)"></div>
+      </div>
+    </div>
+    <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="fileAny" accept="image/*,application/pdf" multiple hidden>
+  </div>
+
+  <!-- STEP 5: preview & approve -->
+  <div class="step" id="step5">
+    <h1>ตรวจสอบก่อนบันทึก<small>เอกสารด้านล่างคือไฟล์ PDF ที่จะถูกเก็บใน Google Drive</small></h1>
+    <div class="card">
+      <dl class="summ" id="summ"></dl>
+      <div id="pvWarn"></div>
+    </div>
+    <div class="pv" id="pv"></div>
+    <div class="btnrow">
+      <a class="btn btn-ghost" id="btnOpenPdf" href="#" target="_blank" rel="noopener" hidden>เปิดไฟล์ PDF ตัวอย่าง</a>
+      <button class="btn btn-ghost" type="button" id="btnMakePdf">สร้างไฟล์ PDF ตัวอย่าง</button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div class="step" id="stepDone">
+    <h1>บันทึกแล้ว<small id="doneSub"></small></h1>
+    <div class="card">
+      <div style="font-family:var(--fd);font-size:28px;color:var(--gold2)" id="doneId"></div>
+      <dl class="summ mt" id="doneSumm"></dl>
+      <div class="btnrow"><a class="btn btn-ghost" id="donePdf" href="#" target="_blank" rel="noopener">เปิด PDF ใน Drive</a></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn btn-gold" type="button" id="btnNext">บันทึกรายการถัดไป</button>
+      <button class="btn btn-ghost" type="button" id="btnChangeWho">เปลี่ยนคนบันทึก</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LIST ================= -->
+<section class="view" id="view-list">
+  <h1>รายการ<small id="listSub"></small></h1>
+  <div class="kpi" id="kpis"></div>
+  <div class="chips mt8" id="listFilters">
+    <button class="chip on" type="button" data-f="mine">ของฉัน</button>
+    <button class="chip" type="button" data-f="all">ทั้งหมด</button>
+    <button class="chip" type="button" data-f="pending">รอตรวจ</button>
+    <button class="chip" type="button" data-f="reimb">รอจ่ายคืน</button>
+  </div>
+  <div class="mt" id="listBody"></div>
+  <div class="btnrow"><a class="btn btn-ghost btn-sm" id="btnSheet" href="#" target="_blank" rel="noopener" hidden>เปิด Google Sheet</a><button class="btn btn-ghost btn-sm" type="button" id="btnRefresh">โหลดใหม่</button></div>
+</section>
+</main>
+
+<!-- ================= NAV ================= -->
+<div class="navbar">
+  <div class="in">
+    <button class="btn btn-ghost" type="button" id="btnBack">← กลับ</button>
+    <div class="grow"></div>
+    <button class="btn btn-gold" type="button" id="btnFwd">ถัดไป →</button>
+    <div class="tabs"><button type="button" data-v="wiz" class="on">บันทึก</button><button type="button" data-v="list">รายการ</button></div>
+  </div>
+</div>
+
+<!-- ================= OVERLAYS ================= -->
+<div class="ov" id="ovSettings"><div class="sheet">
+  <h2>ตั้งค่า</h2>
+  <div id="setAcct"></div>
+  <div id="setIntro"></div>
+  <label class="lbl" for="setApi">URL ระบบหลังบ้าน (Apps Script Web app /exec)</label>
+  <input class="field" id="setApi" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off">
+  <label class="lbl mt" for="setToken">รหัสเข้าใช้งาน (ถ้าตั้งไว้ใน Script Properties)</label>
+  <input class="field" id="setToken" placeholder="APP_TOKEN" autocomplete="off">
+  <div class="switch mt"><span class="tx">อ่านสลิปด้วย AI อัตโนมัติ<small>เมื่อแนบหลักฐานการชำระเงิน ระบบส่งให้ OpenAI อ่านยอด วันที่ ผู้รับเงิน (อ่านเฉพาะสลิป)</small></span><input type="checkbox" id="setAutoAI" style="width:22px;height:22px"></div>
+  <div class="btnrow">
+    <button class="btn btn-ghost" type="button" id="btnTest">ทดสอบการเชื่อมต่อ</button>
+    <button class="btn btn-gold" type="button" id="btnSaveSettings">บันทึกการตั้งค่า</button>
+  </div>
+  <div class="btnrow"><button class="btn btn-ghost btn-sm" type="button" id="btnReload">โหลดรายชื่อ/หมวดหมู่ใหม่</button><button class="btn btn-ghost btn-sm" type="button" id="btnClearLocal">ล้างข้อมูลในเครื่อง</button><button class="btn btn-ghost btn-sm" type="button" id="btnLogout">ออกจากระบบ</button></div>
+  <p class="hint" id="verLine"></p>
+</div></div>
+
+<div class="ov" id="ovAsk"><div class="sheet">
+  <h2 id="askTitle"></h2><div id="askBody" style="font-size:15px;line-height:1.5"></div>
+  <div class="btnrow"><button class="btn btn-ghost" type="button" id="askNo">ยกเลิก</button><button class="btn btn-gold" type="button" id="askYes">ตกลง</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<div class="busy" id="busy"><div><div class="spin"></div><div id="busyText">กำลังทำงาน…</div></div></div>
+
+<!-- off-screen render zone for the A4 cover sheet -->
+<div id="renderZone"><div class="a4" id="coverRender"></div></div>
+<script src="config.js?v=2.1.0"></script>
+<script src="logo.js?v=2.1.0"></script>
+<script src="app-core.js?v=2.1.0"></script>
+<script src="app-form.js?v=2.1.0"></script>
+<script src="app-pdf.js?v=2.1.0"></script>
+<script src="app-main.js?v=2.1.0"></script>
+</body>
+</html>
