@@ -1,10 +1,11 @@
 /* ============================================================================
-   TESR Ledger — Backend (Google Apps Script)   v2.1.1 · กันยายน 2026
+   TESR Ledger — Backend (Google Apps Script)   v2.2.0 · กันยายน 2026
    ----------------------------------------------------------------------------
    หน้าที่ (หลังบ้านของ index.html)
    · รับเอกสาร PDF ที่แอปรวมให้แล้ว (ใบปะหน้า + ใบเสร็จ + สลิป) → เก็บลง Google Drive
      ตามโฟลเดอร์ ปี / เดือน / หมวดค่าใช้จ่าย  ชื่อไฟล์ = วันที่_เลขรายการ_ผู้บันทึก_ผู้ขาย_ยอด.pdf
-   · บันทึก 1 แถวต่อรายการในชีต "รายจ่าย" (ลิงก์ PDF แสดงเป็นชื่อไฟล์)
+   · บันทึก 1 แถวต่อรายการใน "ชีตของเดือนนั้น" (ชื่อชีต = ปี-เดือน เช่น 2026-09 · สร้างให้อัตโนมัติ
+     จากชีตแม่แบบเมื่อมีรายการแรกของเดือน) — เดือนละชีต ตรวจสอบง่าย ไม่ปนกัน · ลิงก์ PDF แสดงเป็นชื่อไฟล์
    · AI OCR (OpenAI) อ่านสลิปโอนเงิน → ยอด วันที่ ผู้รับเงิน (เฉพาะสลิป)
    · Dashboard รายเดือน ตามหมวด ตามผู้บันทึก รอตรวจ รอจ่ายคืน · แจ้งเตือนอีเมล
    · ตรวจการเข้าสู่ระบบด้วย Google: รับ ID token จากแอป → ตรวจกับ Google → อนุญาตเฉพาะอีเมลใน ALLOWED_EMAILS
@@ -14,7 +15,7 @@
 
    ติดตั้ง
    1) Google Sheet ใหม่ → ส่วนขยาย → Apps Script → วางไฟล์นี้ทับ Code.gs → บันทึก
-   2) รัน setup() หนึ่งครั้ง (อนุญาตสิทธิ์) — รันซ้ำได้ ไม่ทับข้อมูล
+   2) รัน setup() หนึ่งครั้ง (อนุญาตสิทธิ์) — รันซ้ำได้ ไม่ทับข้อมูล (ถ้ามีชีต "รายจ่าย" แบบเดิม จะย้ายแถวไปชีตรายเดือนให้)
    3) Deploy → New deployment → Web app → Execute as: Me · Access: Anyone → คัดลอก URL /exec ใส่ index.html (CONFIG.API_URL)
 
    Script Properties (Project Settings → Script properties)
@@ -23,11 +24,11 @@
    ชีต "ตั้งค่า": GOOGLE_CLIENT_ID (OAuth Client ID เดียวกับใน index.html) และ ALLOWED_EMAILS
 ============================================================================ */
 
-const APP = { name: 'TESR Ledger', version: '2.1.1' };
+const APP = { name: 'TESR Ledger', version: '2.2.0' };
 const TZ = 'Asia/Bangkok';
-const SHEET = { EXP: 'รายจ่าย', SET: 'ตั้งค่า', DASH: 'Dashboard' };
+const SHEET = { SET: 'ตั้งค่า', DASH: 'Dashboard', TPL: 'แม่แบบ', LEGACY: 'รายจ่าย' };   // ชีตรายเดือนชื่อ ปี-เดือน เช่น 2026-09
 
-// คอลัมน์ชีต "รายจ่าย" (A → V) — ห้ามสลับ Dashboard อ้างอิงตามตัวอักษรคอลัมน์
+// คอลัมน์ของชีตรายเดือน (A → V) — ห้ามสลับ Dashboard อ้างอิงตามตัวอักษรคอลัมน์
 const HEADERS = [
   'ID', 'บันทึกเมื่อ', 'วันที่จ่าย', 'งวด', 'ผู้บันทึก',                         // A-E
   'ชื่อ-นามสกุล', 'แผนก', 'ใบเสร็จ', 'หมวดหมู่', 'รายละเอียด',                 // F-J
@@ -129,7 +130,8 @@ function bootstrap_(req, login) {
       companyName: str_(s.COMPANY_NAME), companyTaxId: str_(s.COMPANY_TAX_ID), approver: str_(s.APPROVER_NAME),
       ai: aiEnabled_(s), aiOn: str_(s.AI_OCR).toLowerCase() !== 'off', aiModel: str_(s.AI_MODEL) || 'gpt-5-mini',
       driveLayout: str_(s.DRIVE_LAYOUT).toLowerCase() === 'day' ? 'day' : 'month',
-      sheetUrl: ss_().getUrl(), tokenRequired: !!props_().getProperty('APP_TOKEN'),
+      sheetUrl: monthSheetUrl_(str_(req.period) || fmtDate_(new Date(), 'yyyy-MM')), tokenRequired: !!props_().getProperty('APP_TOKEN'),
+      monthlySheets: true,
     },
     recent: recentFromScan_(scan, num_(s.RECENT_LIMIT) || 200),
     summary: summaryFromScan_(scan, str_(req.period) || fmtDate_(new Date(), 'yyyy-MM')),
@@ -141,7 +143,6 @@ function aiEnabled_(s) { return str_(s.AI_OCR).toLowerCase() !== 'off' && !!prop
 // ============================================================ Submit (PDF ที่รวมแล้ว + ข้อมูลรายการ)
 function submit_(req, login) {
   const s = settings_();
-  const sheet = sheet_(SHEET.EXP);
   const by = str_(req.by);
   if (!by) throw new Error('ระบุชื่อผู้บันทึก');
   const dateStr = str_(req.date) || fmtDate_(new Date(), 'yyyy-MM-dd');
@@ -162,9 +163,10 @@ function submit_(req, login) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  let id, rowIndex;
+  let id, rowIndex, sheet;
   try {
-    id = nextId_(sheet, dateStr.slice(0, 4));
+    sheet = monthSheet_(dateStr.slice(0, 7), true);            // ชีตของเดือนที่จ่าย (สร้างใหม่ถ้ายังไม่มี)
+    id = nextId_(dateStr.slice(0, 4));
     rowIndex = sheet.getLastRow() + 1;
     const row = new Array(HEADERS.length).fill('');
     row[COL.ID] = id;
@@ -198,20 +200,51 @@ function submit_(req, login) {
   setLink_(sheet, rowIndex, COL.PDF, link);
 
   const vals = sheet.getRange(rowIndex, 1, 1, HEADERS.length).getValues()[0];
-  const entry = rowToEntry_(vals, rowIndex, link);
+  const entry = rowToEntry_(vals, rowIndex, link, sheet.getName());
   try { notify_(entry, s); } catch (err) { /* ไม่กระทบการบันทึก */ }
   return { ok: true, entry: entry };
 }
 
-function nextId_(sheet, year) {
+function nextId_(year) {
   const prefix = 'EXP-' + year + '-';
   let max = 0;
-  const last = sheet.getLastRow();
-  if (last >= 2) sheet.getRange(2, 1, last - 1, 1).getValues().forEach(r => {
-    const v = String(r[0]);
-    if (v.indexOf(prefix) === 0) { const n = parseInt(v.slice(prefix.length), 10); if (n > max) max = n; }
+  monthSheets_().filter(sh => sh.getName().indexOf(year + '-') === 0).forEach(sh => {
+    const last = sh.getLastRow();
+    if (last >= 2) sh.getRange(2, 1, last - 1, 1).getValues().forEach(r => {
+      const v = String(r[0]);
+      if (v.indexOf(prefix) === 0) { const n = parseInt(v.slice(prefix.length), 10); if (n > max) max = n; }
+    });
   });
   return prefix + String(max + 1).padStart(4, '0');
+}
+
+// ============================================================ ชีตรายเดือน (ชื่อ ปี-เดือน)
+function isMonthName_(name) { return /^\d{4}-\d{2}$/.test(name); }
+/** ชีตรายเดือนทั้งหมด เรียงจากเก่าไปใหม่ */
+function monthSheets_() { return ss_().getSheets().filter(sh => isMonthName_(sh.getName())).sort((a, b) => a.getName() < b.getName() ? -1 : a.getName() > b.getName() ? 1 : 0); }
+/** หาชีตของเดือน (ปี-เดือน) · create = true จะคัดลอกจากชีตแม่แบบแล้ววางถัดจาก Dashboard/ตั้งค่า (เดือนใหม่อยู่ซ้ายสุดของกลุ่มเดือน) */
+function monthSheet_(period, create) {
+  const ss = ss_();
+  let sh = ss.getSheetByName(period);
+  if (sh || !create) return sh;
+  const tpl = ss.getSheetByName(SHEET.TPL) || buildTemplate_();
+  sh = tpl.copyTo(ss).setName(period);
+  sh.showSheet();
+  orderSheets_();
+  refreshDashboardMonths_();
+  return sh;
+}
+/** จัดลำดับแท็บ: Dashboard · ตั้งค่า · ชีตเดือน (ใหม่ → เก่า) · ชีตที่ซ่อน (แม่แบบ/เดิม) อยู่ท้ายสุด */
+function orderSheets_() {
+  const ss = ss_();
+  const put = (sh, pos) => { if (sh) { ss.setActiveSheet(sh); ss.moveActiveSheet(pos); } };
+  put(ss.getSheetByName(SHEET.DASH), 1);
+  put(ss.getSheetByName(SHEET.SET), 2);
+  monthSheets_().reverse().forEach((sh, i) => put(sh, 3 + i));
+}
+function monthSheetUrl_(period) {
+  const sh = monthSheet_(period, false);
+  return ss_().getUrl() + (sh ? '#gid=' + sh.getSheetId() : '');
 }
 
 // ============================================================ Drive
@@ -249,17 +282,20 @@ function linkFromRich_(rt) {
 }
 
 // ============================================================ Reads
+/** อ่านทุกแถวจากชีตรายเดือนทั้งหมด (เก่า → ใหม่) */
 function scan_() {
-  const sheet = sheet_(SHEET.EXP);
-  const last = sheet.getLastRow();
-  if (last < 2) return [];
-  const values = sheet.getRange(2, 1, last - 1, HEADERS.length).getValues();
-  const rich = sheet.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
   const out = [];
-  for (let i = 0; i < values.length; i++) if (str_(values[i][COL.ID])) out.push(rowToEntry_(values[i], i + 2, linkFromRich_(rich[i][0])));
+  monthSheets_().forEach(sheet => {
+    const last = sheet.getLastRow();
+    if (last < 2) return;
+    const values = sheet.getRange(2, 1, last - 1, HEADERS.length).getValues();
+    const rich = sheet.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
+    for (let i = 0; i < values.length; i++) if (str_(values[i][COL.ID])) out.push(rowToEntry_(values[i], i + 2, linkFromRich_(rich[i][0]), sheet.getName()));
+  });
   return out;
 }
-function recentFromScan_(entries, limit) { return entries.slice(Math.max(0, entries.length - limit)).reverse(); }
+/** รายการล่าสุดตามเวลาที่บันทึก (ข้ามเดือน) */
+function recentFromScan_(entries, limit) { return entries.slice().sort((a, b) => a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : a.id < b.id ? 1 : a.id > b.id ? -1 : 0).slice(0, limit); }
 
 function summaryFromScan_(entries, period) {
   period = period || fmtDate_(new Date(), 'yyyy-MM');
@@ -277,11 +313,11 @@ function summaryFromScan_(entries, period) {
   return out;
 }
 
-function rowToEntry_(r, rowIndex, link) {
+function rowToEntry_(r, rowIndex, link, sheetName) {
   const d = v => (v instanceof Date) ? fmtDate_(v, 'yyyy-MM-dd') : str_(v);
   const t = v => (v instanceof Date) ? fmtDate_(v, 'yyyy-MM-dd HH:mm') : str_(v);
   return {
-    row: rowIndex, id: str_(r[COL.ID]), ts: t(r[COL.TS]), date: d(r[COL.DATE]), period: str_(r[COL.PERIOD]),
+    sheet: sheetName || '', row: rowIndex, id: str_(r[COL.ID]), ts: t(r[COL.TS]), date: d(r[COL.DATE]), period: str_(r[COL.PERIOD]),
     by: str_(r[COL.BY]), fullName: str_(r[COL.FULLNAME]), dept: str_(r[COL.DEPT]),
     hasReceipt: str_(r[COL.RECEIPT]) === RECEIPT.YES, receipt: str_(r[COL.RECEIPT]), cat: str_(r[COL.CAT]), desc: str_(r[COL.DESC]),
     vendor: str_(r[COL.VENDOR]), amount: num_(r[COL.AMOUNT]), pay: str_(r[COL.PAY]), reimb: str_(r[COL.REIMB]),
@@ -382,28 +418,59 @@ function installTriggers() {
 }
 
 // ============================================================ Setup
-/** รันครั้งเดียวหลังวางโค้ด — สร้าง/ซ่อมชีต หัวตาราง ค่าเริ่มต้น Dashboard และโฟลเดอร์หลัก (รันซ้ำได้ ไม่ทับข้อมูล) */
+/** รันครั้งเดียวหลังวางโค้ด — สร้าง/ซ่อมชีตตั้งค่า ชีตแม่แบบ Dashboard ชีตเดือนปัจจุบัน และโฟลเดอร์หลัก (รันซ้ำได้ ไม่ทับข้อมูล) */
 function setup() {
   const ss = ss_();
   ss.setSpreadsheetTimeZone(TZ);
   buildSettings_();
-  buildExpenses_();
+  buildTemplate_();
   buildDashboard_();
+  migrateLegacy_();
+  monthSheet_(fmtDate_(new Date(), 'yyyy-MM'), true);
   receiptRoot_(settings_());
-  const first = ss.getSheets()[0];
-  if ((first.getName() === 'Sheet1' || first.getName() === 'ชีต1') && first.getLastRow() === 0) ss.deleteSheet(first);
-  ss.setActiveSheet(sheet_(SHEET.EXP));
+  const first = ss.getSheets().find(sh => (sh.getName() === 'Sheet1' || sh.getName() === 'ชีต1') && sh.getLastRow() === 0);
+  if (first) ss.deleteSheet(first);
+  orderSheets_();
+  refreshDashboardMonths_();
+  ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
   SpreadsheetApp.getActive().toast('ติดตั้งเสร็จ — Deploy เป็น Web app ได้เลย', APP.name, 8);
+}
+
+/** ย้ายข้อมูลจากชีต "รายจ่าย" แบบเดิม (ก่อน v2.2) ไปยังชีตรายเดือน แล้วซ่อนชีตเดิมไว้ */
+function migrateLegacy_() {
+  const ss = ss_();
+  const old = ss.getSheetByName(SHEET.LEGACY);
+  if (!old) return;
+  const last = old.getLastRow();
+  if (last < 2) { ss.deleteSheet(old); return; }
+  const values = old.getRange(2, 1, last - 1, HEADERS.length).getValues();
+  const rich = old.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
+  let moved = 0;
+  values.forEach((row, i) => {
+    if (!str_(row[COL.ID])) return;
+    const period = str_(row[COL.PERIOD]) || (row[COL.DATE] instanceof Date ? fmtDate_(row[COL.DATE], 'yyyy-MM') : str_(row[COL.DATE]).slice(0, 7));
+    if (!isMonthName_(period)) return;
+    const sh = monthSheet_(period, true);
+    const r = sh.getLastRow() + 1;
+    sh.getRange(r, 1, 1, HEADERS.length).setNumberFormats([ROW_FORMATS]).setValues([row]);
+    sh.getRange(r, COL.PDF + 1).setRichTextValue(rich[i][0]);
+    moved++;
+  });
+  old.setName(SHEET.LEGACY + ' (ย้ายไปชีตรายเดือนแล้ว)');
+  old.hideSheet();
+  SpreadsheetApp.getActive().toast('ย้าย ' + moved + ' รายการจากชีต "' + SHEET.LEGACY + '" ไปชีตรายเดือนแล้ว', APP.name, 8);
 }
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('TESR Ledger')
     .addItem('ติดตั้ง / ซ่อมโครงสร้างชีต (setup)', 'setup')
+    .addItem('สร้างชีตเดือนปัจจุบัน', 'createCurrentMonthSheet')
     .addSeparator()
     .addItem('ติดตั้งสรุปรายวัน 18:00', 'installTriggers')
     .addItem('ส่งสรุปวันนี้ทันที', 'dailyDigest')
     .addToUi();
 }
+function createCurrentMonthSheet() { const p = fmtDate_(new Date(), 'yyyy-MM'); monthSheet_(p, true); SpreadsheetApp.getActive().toast('ชีต ' + p + ' พร้อมใช้งาน', APP.name); }
 
 function ensureSheet_(name) { const ss = ss_(); return ss.getSheetByName(name) || ss.insertSheet(name); }
 
@@ -419,8 +486,9 @@ function buildSettings_() {
   sh.setTabColor('#C9A84C');
 }
 
-function buildExpenses_() {
-  const sh = ensureSheet_(SHEET.EXP);
+/** ชีตแม่แบบ (ซ่อนไว้) — หัวตาราง รูปแบบ dropdown สี และความกว้างคอลัมน์ ถูกคัดลอกไปทุกชีตรายเดือน */
+function buildTemplate_() {
+  const sh = ensureSheet_(SHEET.TPL);
   const n = HEADERS.length;
   if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
   const cur = sh.getRange(1, 1, 1, n).getValues()[0];
@@ -441,40 +509,65 @@ function buildExpenses_() {
     cf('Q', STATUS.NEW, '#FFF1CC'), cf('Q', STATUS.RETURNED, '#F8D0D0'), cf('Q', STATUS.DONE, '#DCEFDC'),
     cf('N', REIMB.PENDING, '#FFE2B8'), cf('H', RECEIPT.NO, '#F6E3E3'),
   ]);
+  sh.hideSheet();
+  return sh;
 }
 
 function buildDashboard_() {
   const sh = ensureSheet_(SHEET.DASH);
   sh.clear();
-  const R = "'" + SHEET.EXP + "'!";
+  const M = 'INDIRECT("\'"&$B$2&"\'!';                        // อ้างอิงชีตของเดือนที่เลือกใน B2
   sh.getRange('A1').setValue('TESR Ledger — Dashboard').setFontSize(16).setFontWeight('bold').setFontColor('#8B0000');
-  sh.getRange('A2').setValue('งวด (yyyy-mm) — พิมพ์ทับได้');
+  sh.getRange('A2').setValue('เดือน (เลือกจากรายการ)');
   sh.getRange('B2').setFormula('=TEXT(TODAY(),"yyyy-mm")').setFontWeight('bold').setBackground('#FFF8E6');
+  sh.getRange('C2').setValue('← พิมพ์ทับหรือเลือกเดือนอื่นได้ ตัวเลขด้านล่างเป็นของเดือนนั้น');
   const kpis = [
-    ['รายจ่ายรวมในงวด', '=SUMIFS(' + R + 'L:L,' + R + 'D:D,$B$2)'],
-    ['จำนวนรายการ', '=COUNTIFS(' + R + 'D:D,$B$2)'],
-    ['ไม่มีใบเสร็จ (ใช้ใบปะหน้า)', '=SUMIFS(' + R + 'L:L,' + R + 'D:D,$B$2,' + R + 'H:H,"' + RECEIPT.NO + '")'],
-    ['รายการรอตรวจ', '=COUNTIFS(' + R + 'D:D,$B$2,' + R + 'Q:Q,"' + STATUS.NEW + '")'],
-    ['รอจ่ายคืนพนักงาน (ทุกงวด)', '=SUMIFS(' + R + 'L:L,' + R + 'N:N,"' + REIMB.PENDING + '")'],
+    ['รายจ่ายรวมในเดือน', '=IFERROR(SUM(' + M + 'L2:L")),0)'],
+    ['จำนวนรายการ', '=IFERROR(COUNTA(' + M + 'A2:A")),0)'],
+    ['ไม่มีใบเสร็จ (ใช้ใบปะหน้า)', '=IFERROR(SUMIF(' + M + 'H2:H"),"' + RECEIPT.NO + '",' + M + 'L2:L")),0)'],
+    ['รายการรอตรวจ', '=IFERROR(COUNTIF(' + M + 'Q2:Q"),"' + STATUS.NEW + '"),0)'],
+    ['รอจ่ายคืนพนักงาน (เดือนนี้)', '=IFERROR(SUMIF(' + M + 'N2:N"),"' + REIMB.PENDING + '",' + M + 'L2:L")),0)'],
   ];
   kpis.forEach((k, i) => { sh.getRange(4 + i, 1).setValue(k[0]); sh.getRange(4 + i, 2).setFormula(k[1]); });
   sh.getRange('B4:B8').setNumberFormat('#,##0.00').setFontWeight('bold');
   sh.getRange('B5').setNumberFormat('0'); sh.getRange('B7').setNumberFormat('0');
 
-  sh.getRange('D3').setValue('ตามหมวดหมู่').setFontWeight('bold');
-  sh.getRange('D4').setFormula('=IFERROR(QUERY(' + R + 'A2:V,"select I, count(A), sum(L) where D=\'"&$B$2&"\' group by I order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในงวดนี้")');
+  sh.getRange('D3').setValue('ตามหมวดหมู่ (เดือนที่เลือก)').setFontWeight('bold');
+  sh.getRange('D4').setFormula('=IFERROR(QUERY(' + M + 'A2:V"),"select I, count(A), sum(L) where A is not null group by I order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในเดือนนี้")');
   sh.getRange('F4:F30').setNumberFormat('#,##0.00');
-  sh.getRange('H3').setValue('ตามผู้บันทึก').setFontWeight('bold');
-  sh.getRange('H4').setFormula('=IFERROR(QUERY(' + R + 'A2:V,"select E, count(A), sum(L) where D=\'"&$B$2&"\' group by E order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในงวดนี้")');
+  sh.getRange('H3').setValue('ตามผู้บันทึก (เดือนที่เลือก)').setFontWeight('bold');
+  sh.getRange('H4').setFormula('=IFERROR(QUERY(' + M + 'A2:V"),"select E, count(A), sum(L) where A is not null group by E order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในเดือนนี้")');
   sh.getRange('J4:J30').setNumberFormat('#,##0.00');
 
-  sh.getRange('A11').setValue('รอจ่ายคืนพนักงาน (ทุกงวด)').setFontWeight('bold');
+  sh.getRange('A11').setValue('รอจ่ายคืนพนักงาน (เดือนที่เลือก)').setFontWeight('bold');
   sh.getRange('A12:E12').setValues([['ID', 'วันที่จ่าย', 'ผู้บันทึก', 'รายละเอียด', 'จำนวนเงิน']]).setFontWeight('bold').setBackground('#000000').setFontColor('#C9A84C');
-  sh.getRange('A13').setFormula('=IFERROR(QUERY(' + R + 'A2:V,"select A,C,E,J,L where N=\'' + REIMB.PENDING + '\' order by C",0),"ไม่มีรายการรอจ่ายคืน")');
+  sh.getRange('A13').setFormula('=IFERROR(QUERY(' + M + 'A2:V"),"select A,C,E,J,L where N=\'' + REIMB.PENDING + '\' order by C",0),"ไม่มีรายการรอจ่ายคืน")');
   sh.getRange('B13:B').setNumberFormat('yyyy-mm-dd');
   sh.getRange('E13:E').setNumberFormat('#,##0.00');
-  [260, 140, 20, 260, 70, 120, 20, 140, 70, 120].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  [260, 140, 20, 260, 70, 120, 20, 140, 70, 120, 20, 110, 120, 70, 90, 120, 60].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.setTabColor('#C9A84C');
+  refreshDashboardMonths_();
+}
+
+/** ตาราง "ทุกเดือน" (คอลัมน์ L–Q) + รายชื่อเดือนสำหรับ dropdown ใน B2 (คอลัมน์ Z ซ่อนไว้) — เรียกใหม่ทุกครั้งที่มีชีตเดือนใหม่ */
+function refreshDashboardMonths_() {
+  const sh = ss_().getSheetByName(SHEET.DASH);
+  if (!sh) return;
+  const months = monthSheets_().reverse();                    // ใหม่ → เก่า
+  sh.getRange('L3:Q60').clearContent();
+  sh.getRange('L3').setValue('ทุกเดือน').setFontWeight('bold');
+  sh.getRange('L4:Q4').setValues([['เดือน', 'รายจ่ายรวม', 'รายการ', 'รอตรวจ', 'รอจ่ายคืน', 'ชีต']]).setFontWeight('bold').setBackground('#000000').setFontColor('#C9A84C');
+  if (months.length) {
+    const rows = months.map(m => { const R = "'" + m.getName() + "'!"; return [m.getName(), '=SUM(' + R + 'L2:L)', '=COUNTA(' + R + 'A2:A)', '=COUNTIF(' + R + 'Q2:Q,"' + STATUS.NEW + '")', '=SUMIF(' + R + 'N2:N,"' + REIMB.PENDING + '",' + R + 'L2:L)', '=HYPERLINK("#gid=' + m.getSheetId() + '","เปิด")']; });
+    sh.getRange(5, 12, rows.length, 6).setValues(rows);
+    sh.getRange(5, 13, rows.length, 1).setNumberFormat('#,##0.00'); sh.getRange(5, 16, rows.length, 1).setNumberFormat('#,##0.00');
+    sh.getRange(5, 14, rows.length, 2).setNumberFormat('0');
+  }
+  // รายชื่อเดือนสำหรับ dropdown B2
+  sh.getRange('Z2:Z100').clearContent();
+  if (months.length) sh.getRange(2, 26, months.length, 1).setValues(months.map(m => [m.getName()]));
+  sh.getRange('B2').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sh.getRange('Z2:Z100'), true).setAllowInvalid(true).build());
+  sh.hideColumns(26);
 }
 
 function styleHeader_(sh, n) {
