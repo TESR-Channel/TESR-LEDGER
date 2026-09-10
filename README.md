@@ -7,14 +7,15 @@
 เข้าสู่ระบบด้วย Google (3 บัญชีของบริษัท)  →  1 ใครบันทึก  →  2 มีใบเสร็จไหม  →  3 หมวดหมู่  →  4 รายละเอียด  →  5 ตรวจสอบ PDF แล้วกดยืนยัน
 ```
 
-โลโก้ TESR ฝังอยู่ในไฟล์ index.html แล้ว (หัวแอป หน้าล็อกอิน หัวใบปะหน้า และหัวหน้าหลักฐานทุกหน้าใน PDF) ไม่ต้องพึ่งไฟล์ภายนอก
+โลโก้ TESR ฝังอยู่ในไฟล์ logo.js แล้ว (หัวแอป หน้าล็อกอิน หัวใบปะหน้า และหัวหน้าหลักฐานทุกหน้าใน PDF) ไม่ต้องพึ่งไฟล์ภายนอก
 
 | ไฟล์ | คืออะไร | ใครแก้ |
 |---|---|---|
-| `index.html` | หน้าแอป (ไฟล์เดียว) | ผู้ดูแล — ใส่ URL หลังบ้านครั้งเดียว |
+| `config.js` | **ตั้งค่าแอปทั้งหมดในไฟล์เดียว**: URL หลังบ้าน, APP_TOKEN, Google Client ID, อีเมลที่อนุญาต | ผู้ดูแล — แก้บน GitHub ได้โดยตรง |
+| `index.html` + `styles.css` + `app-core.js` `app-form.js` `app-pdf.js` `app-main.js` + `logo.js` | หน้าแอป (แยกไฟล์เพื่อให้แก้ไขง่าย โลโก้ฝังอยู่ใน logo.js) | ไม่ต้องแก้ |
 | `staff.csv` | **ฐานข้อมูลพนักงาน**: ชื่อเล่น, ชื่อ-นามสกุล, แผนก, ไฟล์ลายเซ็น, บทบาท (ฝ้าย = อานนท์ หม้อสุวรรณ ผู้อนุมัติ · จู = Admin/เลขา/บัญชี) | แก้บน GitHub ได้โดยตรง |
 | `categories.csv` | **หมวดหมู่ = ชื่อโฟลเดอร์ใน Drive** + ประเภทในใบปะหน้า + ตัวอย่าง | แก้บน GitHub ได้โดยตรง |
-| `signatures.json` | ลายเซ็นทั้ง 7 แบบฝัง (base64) — แอปใช้ไฟล์นี้เมื่อไม่มีไฟล์ PNG ในโฟลเดอร์ signatures/ | เพิ่ม PNG ในโฟลเดอร์ signatures/ จะมีผลก่อนเสมอ |
+| `signatures.json` | ลายเซ็นทั้ง 6 คนแบบฝัง (base64 แบ่งเป็นบรรทัดละ 100 ตัวอักษร) — แอปใช้ไฟล์นี้เมื่อไม่มีไฟล์ PNG ในโฟลเดอร์ signatures/ | เพิ่ม PNG ในโฟลเดอร์ signatures/ จะมีผลก่อนเสมอ |
 | `signatures/*.png` | รูปลายเซ็นพื้นโปร่ง (ฝ้าย/อานนท์, ซัน, โอ๊ต, จู, พีค, ฟาม) — อยู่ใน zip อัปโหลดเข้า repo ได้ (ไม่บังคับ) | เพิ่มไฟล์แล้วอ้างใน staff.csv |
 | `logo.png`, `logo-192.png` | โลโก้ | — |
 | `flow.html` | เอกสารอธิบายการทำงานทั้งระบบ | — |
@@ -48,17 +49,17 @@
 4. **Script Properties** (⚙ Project settings): `OPENAI_API_KEY` (ให้ AI อ่านสลิป) และ `APP_TOKEN` (รหัสร่วมของทีม แนะนำตั้ง)
 
 ### 2.2 GitHub Pages — repo นี้: `TESR-Channel/TESR-LEDGER`
-1. ไฟล์ทั้งหมดอยู่ใน repo แล้ว (`index.html`, `Code.gs`, `staff.csv`, `categories.csv`, `signatures.json`, `flow.html`, `README.md`) · ไฟล์รูป `logo.png`, `logo-192.png`, `signatures/*.png` อยู่ใน zip — อัปโหลดเพิ่มได้ผ่าน **Add file → Upload files** (ใช้เป็นไอคอน Add to Home Screen; แอปมีโลโก้และลายเซ็นฝังไว้แล้ว จึงไม่บังคับ)
-2. เปิด `index.html` แก้ `CONFIG.API_URL` เป็น URL จากข้อ 2.1 (และ `APP_TOKEN`) — ทีมจะไม่ต้องตั้งค่าอะไรเลย (หรือให้ตั้งเองที่ ⚙ ในแอป)
+1. ไฟล์ทั้งหมดอยู่ใน repo แล้ว (`index.html`, `config.js`, `styles.css`, `app-*.js`, `logo.js`, `Code.gs`, `staff.csv`, `categories.csv`, `signatures.json`, `flow.html`, `README.md`) · ไฟล์รูป `logo.png`, `logo-192.png`, `signatures/*.png` อยู่ใน zip — อัปโหลดเพิ่มได้ผ่าน **Add file → Upload files** (ใช้เป็นไอคอน Add to Home Screen; แอปมีโลโก้และลายเซ็นฝังไว้แล้ว จึงไม่บังคับ)
+2. เปิด `config.js` แก้ `API_URL` เป็น URL จากข้อ 2.1 (และ `APP_TOKEN`) — ทีมจะไม่ต้องตั้งค่าอะไรเลย (หรือให้ตั้งเองที่ ⚙ ในแอป)
 3. **Settings → Pages → Build and deployment: Deploy from a branch → main / (root)** → ได้ลิงก์ `https://tesr-channel.github.io/TESR-LEDGER/` ส่งให้ทีม → Add to Home Screen
 
 ### 2.3 เปิดใช้ล็อกอิน Google (5 นาที)
 1. เปิด [console.cloud.google.com](https://console.cloud.google.com) → สร้างโปรเจกต์ (หรือใช้โปรเจกต์เดิม) → **APIs & Services → OAuth consent screen** → External → ใส่ชื่อแอป "TESR Ledger" และอีเมลติดต่อ → บันทึก (scope ใช้แค่ email/profile ไม่ต้องขอ verify) → ในหน้า Audience/Test users เพิ่ม 3 อีเมลของบริษัท หรือกด Publish app
 2. **Credentials → Create credentials → OAuth client ID → Web application** · Authorized JavaScript origins ใส่ `https://tesr-channel.github.io` (ไม่มี path) · Create → คัดลอก **Client ID** (ลงท้าย `.apps.googleusercontent.com`)
-3. วาง Client ID ใน `index.html` → `CONFIG.GOOGLE_CLIENT_ID` **และ** ในชีต **ตั้งค่า** → `GOOGLE_CLIENT_ID` (หลังบ้านตรวจ token กับ Google ทุกคำขอ) · รายชื่ออีเมลที่อนุญาตอยู่ที่ `CONFIG.ALLOWED_EMAILS` และชีตตั้งค่า `ALLOWED_EMAILS` (ชีตเป็นตัวตัดสิน)
+3. วาง Client ID ใน `config.js` → `GOOGLE_CLIENT_ID` **และ** ในชีต **ตั้งค่า** → `GOOGLE_CLIENT_ID` (หลังบ้านตรวจ token กับ Google ทุกคำขอ) · รายชื่ออีเมลที่อนุญาตอยู่ที่ `ALLOWED_EMAILS` ใน config.js และชีตตั้งค่า `ALLOWED_EMAILS` (ชีตเป็นตัวตัดสิน)
 4. ทดสอบเปิดหน้าเว็บ → ปุ่ม Sign in with Google → เลือกบัญชีบริษัท → เข้าสู่ขั้นตอนที่ 1 · ทุกแถวในชีตจะบันทึกบัญชี Google ที่ล็อกอิน (คอลัมน์ V)
 
-> ยังไม่ได้ใส่ Client ID: หน้าแรกจะแจ้ง "ผู้ดูแลยังไม่ได้ใส่ GOOGLE_CLIENT_ID" และใช้ต่อไม่ได้ (ตั้ง `CONFIG.LOGIN_REQUIRED = false` ชั่วคราวได้ถ้าจะทดสอบโดยไม่ล็อกอิน)
+> ยังไม่ได้ใส่ Client ID: หน้าแรกจะแจ้ง "ผู้ดูแลยังไม่ได้ใส่ GOOGLE_CLIENT_ID" และใช้ต่อไม่ได้ (ตั้ง `LOGIN_REQUIRED: false` ใน config.js ชั่วคราวได้ถ้าจะทดสอบโดยไม่ล็อกอิน)
 
 ### 2.4 แก้รายชื่อ / หมวดหมู่ (บน GitHub)
 - `staff.csv` — คอลัมน์: `ชื่อเล่น, ชื่อ-นามสกุล, แผนก, ไฟล์ลายเซ็น, บทบาท` · บทบาท `approver` = ผู้อนุมัติ (ชื่อและลายเซ็นบนใบปะหน้า — ตอนนี้คือ ฝ้าย/อานนท์ หม้อสุวรรณ) · `intern` / `other` = ต้องพิมพ์ชื่อเอง · ชื่อ-นามสกุลที่ยังว่าง (จู พีค ฟาม) เติมได้เลย และตรวจชื่อของซัน/โอ๊ตที่อ่านจากลายเซ็น
