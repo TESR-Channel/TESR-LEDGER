@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TESR Ledger v2 — เส้นทางของข้อมูล (หน้าเว็บ → Google Sheet → Google Drive)</title>
+<link rel="icon" href="logo-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2EFE8; --paper2:#E9E4D8; --ink:#141414; --ink2:#4A4640; --muted:#7A766E;
+  --crimson:#8B0000; --gold:#B8912F; --gold2:#C9A84C; --black:#000; --rule:#D5CFC2;
+  --sheet:#1E6B3A; --drive:#1F5FA8; --ai:#8B0000;
+  --fd:"Chakra Petch",system-ui,sans-serif; --fb:"IBM Plex Sans Thai",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--fb);font-size:16px;line-height:1.6}
+a{color:var(--crimson)}
+h1,h2,h3{font-family:var(--fd);line-height:1.15;margin:0}
+h2{font-size:24px;font-weight:700;color:var(--black);margin:0 0 6px}
+h3{font-size:17px;font-weight:600;margin:18px 0 6px}
+p{margin:0 0 10px}
+code,.fn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+code{background:var(--paper2);padding:1px 5px;border-radius:4px;color:var(--ink)}
+.wrap{max-width:820px;margin:0 auto;padding:0 18px 60px}
+
+/* ---------- hero ---------- */
+.hero{background:var(--black);color:var(--paper);padding:32px 0 26px;border-bottom:3px solid var(--gold2)}
+.hero .wrap{padding-bottom:0}
+.brand{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.brand img{width:56px;height:56px;object-fit:contain}
+.brand .t{font-family:var(--fd);font-weight:700;letter-spacing:.14em;color:var(--gold2);font-size:15px}
+.brand .s{color:#9A968E;font-size:13px}
+.hero h1{font-size:30px;font-weight:700;color:#fff;max-width:640px}
+.hero h1 em{font-style:normal;color:var(--gold2)}
+.hero p{color:#C9C4B8;max-width:600px;margin-top:10px}
+.trio{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:6px;margin-top:22px}
+.trio .node{background:#141414;border:1px solid #2A2A2E;border-radius:10px;padding:12px 10px;text-align:center}
+.trio .node b{display:block;font-family:var(--fd);font-size:14px;color:#fff;letter-spacing:.04em}
+.trio .node small{display:block;color:#9A968E;font-size:12px;line-height:1.35;margin-top:3px}
+.trio .arrow{color:var(--gold2);font-family:var(--fd);font-size:20px}
+@media (max-width:520px){.trio{grid-template-columns:1fr}.trio .arrow{text-align:center;transform:rotate(90deg);font-size:18px}}
+
+/* ---------- sections ---------- */
+section{padding:34px 0 8px;border-bottom:1px solid var(--rule)}
+section:last-of-type{border-bottom:0}
+.lead{color:var(--ink2);max-width:640px}
+
+/* flow rail — a real sequence, so numbered */
+.rail{position:relative;margin:22px 0 10px;padding-left:44px}
+.rail::before{content:"";position:absolute;left:15px;top:6px;bottom:6px;width:2px;background:var(--rule)}
+.step{position:relative;margin-bottom:22px}
+.step .num{position:absolute;left:-44px;top:0;width:32px;height:32px;border-radius:50%;background:var(--black);color:var(--gold2);font-family:var(--fd);font-weight:700;font-size:14px;display:grid;place-items:center;border:2px solid var(--gold2)}
+.step h3{margin:2px 0 4px;font-size:18px}
+.step p{margin-bottom:6px}
+.lands{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{display:inline-block;font-size:12.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--rule);color:var(--ink2);background:#fff}
+.tag.sheet{border-color:var(--sheet);color:var(--sheet)}
+.tag.drive{border-color:var(--drive);color:var(--drive)}
+.tag.ai{border-color:var(--ai);color:var(--ai)}
+.tag.web{border-color:var(--gold);color:var(--gold)}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0 14px;background:#fff}
+th,td{text-align:left;vertical-align:top;padding:7px 9px;border-bottom:1px solid var(--rule)}
+th{background:var(--black);color:var(--gold2);font-family:var(--fd);font-weight:600;font-size:13px;letter-spacing:.03em}
+td.c{font-family:var(--fd);font-weight:600;color:var(--crimson);white-space:nowrap}
+tr.g td{background:var(--paper2);font-family:var(--fd);font-weight:600;font-size:13px;color:var(--ink2)}
+.who{font-size:12px;color:var(--muted);white-space:nowrap}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -18px;padding:0 18px}
+
+/* file name anatomy — the memorable element */
+.anatomy{background:var(--black);border-radius:12px;padding:18px 16px 14px;margin:14px 0 8px;overflow-x:auto}
+.anatomy .name{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;white-space:nowrap;color:#fff}
+.anatomy .name span{padding:2px 3px;border-radius:4px;border-bottom:3px solid}
+.seg1{color:#F2EFE8;border-color:#F2EFE8}
+.seg2{color:#C9A84C;border-color:#C9A84C}
+.seg3{color:#FF8A80;border-color:#FF8A80}
+.seg4{color:#7EC8FF;border-color:#7EC8FF}
+.seg5{color:#A8E6A1;border-color:#A8E6A1}
+.seg6{color:#D9B3FF;border-color:#D9B3FF}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;margin-top:14px;font-size:13px;color:#C9C4B8}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+.tree{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;overflow-x:auto;white-space:pre;margin:10px 0}
+.tree i{font-style:normal;color:var(--muted)}
+.tree .d{color:var(--drive);font-weight:600}
+.tree .u{color:var(--crimson)}
+
+.note{border-left:3px solid var(--gold2);background:#fff;padding:10px 14px;border-radius:0 10px 10px 0;margin:12px 0;font-size:15px}
+.note.warn{border-color:var(--crimson)}
+ul{margin:6px 0 12px;padding-left:20px}
+li{margin-bottom:4px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:15px;margin:8px 0 12px}
+.kv dt{font-family:var(--fd);font-weight:600;color:var(--ink2)}
+.kv dd{margin:0}
+@media (max-width:480px){.kv{grid-template-columns:1fr}.kv dt{margin-top:6px}}
+.foot{color:var(--muted);font-size:13px;padding-top:24px}
+@media print{.hero{background:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.anatomy{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <img id="flowLogo" alt="TESR">
+      <div><div class="t">TESR LEDGER</div><div class="s">ระบบบันทึกรายจ่ายบริษัท · เอกสารอธิบายการทำงาน (v2)</div></div>
+    </div>
+    <h1>ล็อกอิน Google แล้ว 5 ขั้นตอนจาก<em>หน้าเว็บ</em> จนได้ <em>PDF ในไดรฟ์</em> และ <em>แถวในชีต</em></h1>
+    <p>เข้าสู่ระบบด้วยบัญชี Google ของบริษัท → ใครบันทึก → มีใบเสร็จไหม → หมวดหมู่ → รายละเอียด → ตรวจสอบแล้วยืนยัน — เอกสารนี้บอกว่าแต่ละขั้นเก็บอะไร ชีตจัดคอลัมน์อย่างไร ไฟล์ตั้งชื่ออย่างไร และ AI ช่วยตรงไหน</p>
+    <div class="trio">
+      <div class="node"><b>หน้าเว็บ</b><small>index.html + staff.csv + categories.csv<br>บน GitHub Pages</small></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>Google Sheet</b><small>ชีต "รายจ่าย" 1 แถวต่อรายการ<br>+ Dashboard</small></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>Google Drive</b><small>โฟลเดอร์หมวดหมู่ / ปี / เดือน<br>ไฟล์ PDF เดียวต่อรายการ</small></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section id="flow">
+  <h2>1. ขั้นตอนในแอป และสิ่งที่เกิดขึ้นเบื้องหลัง</h2>
+  <p class="lead">หน้าเว็บทำงานเกือบทั้งหมดในเครื่องผู้ใช้ รวมถึงการประกอบไฟล์ PDF — Apps Script รับเฉพาะไฟล์ที่เสร็จแล้วกับข้อมูลสรุป</p>
+  <div class="rail">
+    <div class="step"><span class="num">0</span>
+      <h3>เข้าสู่ระบบด้วย Google</h3>
+      <p>หน้าแรกคือปุ่ม Sign in with Google (Google Identity Services) ใช้ได้เฉพาะ 3 บัญชีของบริษัท (ceo.anoney.potter, anoney.potter, tesrshop) บัญชีอื่นถูกปฏิเสธทันที แอปส่ง ID token ไปกับทุกคำขอ และ Apps Script ตรวจกับ Google ซ้ำก่อนทำงานทุกครั้ง บัญชีที่ล็อกอินถูกบันทึกในชีตคอลัมน์ V</p>
+      <div class="lands"><span class="tag web">Google Sign-In</span><span class="tag sheet">คอลัมน์ V</span></div>
+    </div>
+    <div class="step"><span class="num">1</span>
+      <h3>ใครเป็นคนบันทึก</h3>
+      <p>ปุ่มชื่อมาจาก <code>staff.csv</code> (ชื่อเล่น ชื่อ-นามสกุล แผนก ไฟล์ลายเซ็น บทบาท) เด็กฝึกงานหรือคนอื่นพิมพ์ชื่อ-นามสกุลและแผนก แล้ววาดลายเซ็นด้วยนิ้วหรืออัปโหลดรูปได้ ลายเซ็นที่วาดจำไว้ในเครื่อง ชื่อล่าสุดถูกเลือกไว้ให้ครั้งถัดไป</p>
+      <div class="lands"><span class="tag web">อ่าน staff.csv</span><span class="tag web">ลายเซ็นเก็บในเครื่อง</span></div>
+    </div>
+    <div class="step"><span class="num">2</span>
+      <h3>มีใบเสร็จไหม</h3>
+      <p><b>มีใบเสร็จ</b> = แค่ถ่ายใบเสร็จ แนบสลิป เลือกหมวด จบ · <b>ไม่มีใบเสร็จ</b> = กรอกใบปะหน้า (เอกสารประกอบการเบิกค่าใช้จ่าย ในกรณีที่ไม่สามารถจัดหาหลักฐานการชำระเงินได้)</p>
+    </div>
+    <div class="step"><span class="num">3</span>
+      <h3>หมวดหมู่ = โฟลเดอร์ปลายทาง</h3>
+      <p>17 หมวดจาก <code>categories.csv</code> แต่ละหมวดกำหนดชื่อโฟลเดอร์ใน Drive และประเภทในใบปะหน้า (ค่าพาหนะ / ค่าสินค้าและบริการ / อื่นๆ) ไว้แล้ว</p>
+      <div class="lands"><span class="tag web">อ่าน categories.csv</span></div>
+    </div>
+    <div class="step"><span class="num">4</span>
+      <h3>รายละเอียดและหลักฐาน</h3>
+      <p>ทุกช่องแนบมีปุ่ม "ถ่าย" และ "เลือกไฟล์อัปโหลด" (รูปหรือ PDF) รูปถูกย่อในเครื่องก่อน ช่องที่จำเป็นคือ <b>สลิป/หลักฐานการจ่ายที่เห็นยอดเป็นบาท</b> — เมื่อแนบ ระบบส่งรูปให้ AI อ่านสลิป (ข้อ 3) แล้วเติมยอด วันที่ ผู้รับเงิน ให้ตรวจ ถ้าโอนเป็น USD/RMB มีช่อง <b>หลักฐานตอนโอนสกุลต่างประเทศ</b> แยกไว้ (หน้า Payment Successful ของ Alipay/PayPal/บัตร) เพื่อให้บัญชีเห็นทั้งตอนโอนและตอนแปลงเป็นบาทแล้ว กรณีไม่มีใบเสร็จกรอกรายการทีละบรรทัดพร้อมจำนวนเงิน ระบบรวมยอดและแปลงเป็นตัวอักษรให้</p>
+      <div class="lands"><span class="tag ai">AI OCR สลิป (OpenAI)</span></div>
+    </div>
+    <div class="step"><span class="num">5</span>
+      <h3>ตรวจสอบเอกสาร → ยืนยันและบันทึก</h3>
+      <p>แอปวาดใบปะหน้า (ถ้าไม่มีใบเสร็จ) และหน้าหลักฐานทั้งหมดเป็นภาพ A4 ให้เลื่อนดู ลายเซ็นผู้ขอเบิกและผู้อนุมัติ (อานนท์ หม้อสุวรรณ) ใส่ให้อัตโนมัติ กด "สร้างไฟล์ PDF ตัวอย่าง" เปิดไฟล์จริงได้ เมื่อกดยืนยัน แอปรวมทุกหน้าเป็น PDF (ต่อท้ายด้วยไฟล์ PDF ที่แนบ) แล้วส่งให้ Apps Script</p>
+      <div class="lands"><span class="tag web">ประกอบ PDF ในเครื่อง</span></div>
+    </div>
+    <div class="step"><span class="num">6</span>
+      <h3>Apps Script เก็บไฟล์และบันทึกแถว</h3>
+      <p>ออกเลข <code>EXP-ปี-ลำดับ</code> → เก็บ PDF ในโฟลเดอร์ <span class="fn">หมวดหมู่ / ปี / ปี-เดือน</span> ชื่อไฟล์ <span class="fn">วันที่_เลขรายการ_ผู้บันทึก_ร้าน_ยอด.pdf</span> → เขียน 1 แถวในชีต "รายจ่าย" ลิงก์ PDF แสดงเป็นชื่อไฟล์ → อีเมลบัญชี (ถ้าเปิด) → แอปแสดงเลขรายการและลิงก์</p>
+      <div class="lands"><span class="tag drive">PDF 1 ไฟล์</span><span class="tag sheet">1 แถว</span></div>
+    </div>
+    <div class="step"><span class="num">7</span>
+      <h3>ฝ่ายบัญชีทำงานในชีต</h3>
+      <p>กรองแถว "รอตรวจ" เปิด PDF จากลิงก์ พิมพ์ใบปะหน้าถ้าต้องการลายเซ็นจริง ลง FlowAccount แล้วเปลี่ยนสถานะเป็น "บันทึกบัญชีแล้ว" หรือ "ตีกลับ" พร้อมหมายเหตุ รายการที่จ่ายด้วยเงินส่วนตัวมีสถานะ "รอจ่ายคืน" ให้เปลี่ยนเป็น "จ่ายคืนแล้ว" พนักงานเห็นทุกอย่างในแท็บรายการ</p>
+      <div class="lands"><span class="tag sheet">สถานะ · Dashboard</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="sheet">
+  <h2>2. Google Sheet จัดอย่างไร</h2>
+  <p class="lead">3 ชีต ฟังก์ชัน <code>setup</code> สร้างให้ทั้งหมด รันซ้ำได้ไม่ทับข้อมูล รายชื่อและหมวดหมู่ไม่อยู่ในชีต — อยู่ใน CSV บน GitHub</p>
+  <div class="tblwrap"><table>
+    <tr><th>ชีต</th><th>มีอะไร</th><th>ใครแก้</th></tr>
+    <tr><td><b>รายจ่าย</b></td><td>1 แถวต่อรายการ 22 คอลัมน์ (ตารางถัดไป)</td><td class="who">ระบบเขียน · บัญชีแก้สถานะ</td></tr>
+    <tr><td><b>ตั้งค่า</b></td><td>ชื่อบริษัท ผู้อนุมัติ โฟลเดอร์ Drive รูปแบบโฟลเดอร์ การแชร์ อีเมลแจ้งเตือน AI OCR Google Client ID และอีเมลที่อนุญาต</td><td class="who">ผู้ดูแล</td></tr>
+    <tr><td><b>Dashboard</b></td><td>งวดที่เลือก: รวม จำนวน ไม่มีใบเสร็จ รอตรวจ รอจ่ายคืน · ตามหมวดหมู่ · ตามผู้บันทึก · รายการรอจ่ายคืน</td><td class="who">สูตรอัตโนมัติ</td></tr>
+  </table></div>
+
+  <h3>ชีต "รายจ่าย" — 22 คอลัมน์ (A ถึง V)</h3>
+  <div class="tblwrap"><table>
+    <tr><th>คอลัมน์</th><th>หัวตาราง</th><th>ตัวอย่าง / ความหมาย</th><th>ที่มา</th></tr>
+    <tr class="g"><td colspan="4">รายการและคนบันทึก</td></tr>
+    <tr><td class="c">A</td><td>ID</td><td>EXP-2026-0042 — ออกโดยเซิร์ฟเวอร์ ไม่ซ้ำ</td><td class="who">ระบบ</td></tr>
+    <tr><td class="c">B</td><td>บันทึกเมื่อ</td><td>2026-08-10 14:02</td><td class="who">ระบบ</td></tr>
+    <tr><td class="c">C</td><td>วันที่จ่าย</td><td>2026-08-10 — กำหนดงวดและโฟลเดอร์</td><td class="who">พนักงาน / AI จากสลิป</td></tr>
+    <tr><td class="c">D</td><td>งวด</td><td>2026-08</td><td class="who">ระบบ</td></tr>
+    <tr><td class="c">E</td><td>ผู้บันทึก</td><td>ซัน — ชื่อเดียวกับในชื่อไฟล์</td><td class="who">ขั้นที่ 1</td></tr>
+    <tr><td class="c">F</td><td>ชื่อ-นามสกุล</td><td>สุริยา ดีคง (จาก staff.csv หรือพิมพ์เอง)</td><td class="who">ขั้นที่ 1</td></tr>
+    <tr><td class="c">G</td><td>แผนก</td><td>Engineer</td><td class="who">ขั้นที่ 1</td></tr>
+    <tr class="g"><td colspan="4">ประเภทและหมวด</td></tr>
+    <tr><td class="c">H</td><td>ใบเสร็จ</td><td>มีใบเสร็จ / ไม่มีใบเสร็จ (ใบปะหน้า)</td><td class="who">ขั้นที่ 2</td></tr>
+    <tr><td class="c">I</td><td>หมวดหมู่</td><td>ค่าสินค้า (ซื้อมาขายไป) = โฟลเดอร์ใน Drive</td><td class="who">ขั้นที่ 3</td></tr>
+    <tr><td class="c">J</td><td>รายละเอียด</td><td>Livox Mid360s (หลายรายการคั่นด้วย ·)</td><td class="who">ขั้นที่ 4</td></tr>
+    <tr><td class="c">K</td><td>ร้าน/ผู้รับเงิน</td><td>Taobao / Kerry Express — อยู่ในชื่อไฟล์</td><td class="who">ขั้นที่ 4 / AI</td></tr>
+    <tr class="g"><td colspan="4">เงิน</td></tr>
+    <tr><td class="c">L</td><td>จำนวนเงิน (บาท)</td><td>23,908.72 — ยอดที่ถูกตัดจริงเป็นบาท</td><td class="who">ขั้นที่ 4 / AI</td></tr>
+    <tr><td class="c">M</td><td>จ่ายโดย</td><td>บริษัท / ส่วนตัว (ขอเบิกคืน)</td><td class="who">ขั้นที่ 4</td></tr>
+    <tr><td class="c">N</td><td>สถานะเบิกคืน</td><td>ไม่ต้อง / รอจ่ายคืน / จ่ายคืนแล้ว</td><td class="who">ระบบ · บัญชีเปลี่ยน</td></tr>
+    <tr class="g"><td colspan="4">เอกสารและการตรวจ</td></tr>
+    <tr><td class="c">O</td><td>เอกสาร PDF</td><td>ชื่อไฟล์ใน Drive เป็นลิงก์คลิกเปิด</td><td class="who">ระบบ</td></tr>
+    <tr><td class="c">P</td><td>จำนวนหน้า</td><td>3</td><td class="who">ระบบ</td></tr>
+    <tr><td class="c">Q</td><td>สถานะบัญชี</td><td>รอตรวจ → ตรวจแล้ว → บันทึกบัญชีแล้ว หรือ ตีกลับ</td><td class="who">บัญชี</td></tr>
+    <tr><td class="c">R</td><td>หมายเหตุผู้บันทึก</td><td>ข้อความถึงบัญชี + "สลิป: อ้างอิง … จาก KBank"</td><td class="who">ขั้นที่ 4 / AI</td></tr>
+    <tr><td class="c">S</td><td>หมายเหตุบัญชี</td><td>เหตุผลที่ตีกลับ — พนักงานเห็นในแอป</td><td class="who">บัญชี</td></tr>
+    <tr><td class="c">T</td><td>ผู้อนุมัติ</td><td>อานนท์ หม้อสุวรรณ</td><td class="who">ระบบ</td></tr>
+    <tr><td class="c">U</td><td>ประเภท/เหตุผล (ใบปะหน้า)</td><td>ค่าสินค้าและบริการ: สินค้าใน Taobao</td><td class="who">ขั้นที่ 4</td></tr>
+    <tr><td class="c">V</td><td>บัญชี Google ที่ล็อกอิน</td><td>tesrshop@gmail.com — จาก token ที่ตรวจแล้ว ไม่ใช่ค่าที่แอปส่งมา</td><td class="who">ระบบ</td></tr>
+  </table></div>
+  <div class="note">แถว "รอตรวจ" สีเหลือง "ตีกลับ" สีแดง "บันทึกบัญชีแล้ว" สีเขียว "ไม่มีใบเสร็จ" สีชมพูอ่อน "รอจ่ายคืน" สีส้ม — กวาดตาได้โดยไม่ต้องกรอง</div>
+</section>
+
+<section id="ai">
+  <h2>3. AI OCR — มี และอ่านเฉพาะสลิปโอนเงิน</h2>
+  <p class="lead">ใช้ OpenAI (โมเดลเริ่มต้น <code>gpt-5-mini</code>) คีย์อยู่ใน Script Properties ของ Apps Script หน้าเว็บไม่เห็นคีย์</p>
+  <dl class="kv">
+    <dt>อ่านอะไร</dt><dd>สลิปธนาคาร พร้อมเพย์ e-Wallet หน้ายืนยันชำระบัตร รายการเดินบัญชีที่แคปหน้าจอ</dd>
+    <dt>ได้อะไร</dt><dd>ยอดที่โอน · วันที่และเวลา · ผู้รับเงิน · ธนาคารต้นทาง/ปลายทาง · เลขอ้างอิง · ค่าธรรมเนียม · ความมั่นใจ</dd>
+    <dt>เติมช่องไหน</dt><dd>จำนวนเงิน (ถ้ายังว่าง) · วันที่จ่าย · ร้าน/ผู้รับเงิน · หมายเหตุ "สลิป: อ้างอิง … จาก KBank · เวลา 10:50" — ช่องที่เติมขึ้นสีทอง ต้องตรวจ</dd>
+    <dt>ยอดต่างประเทศ</dt><dd>รูปในช่องยอดบาทที่กลายเป็น Alipay ¥4,738 → ไม่เติมยอด แต่เตือนให้ย้ายไปช่องสกุลต่างประเทศ และแนบรายการเดินบัญชีที่เห็น ฿23,908.72 ในช่องยอดบาท · รูปในช่องสกุลต่างประเทศไม่ถูกส่งให้ AI</dd>
+    <dt>ไม่ทำอะไร</dt><dd>ไม่อ่านใบเสร็จ ไม่เลือกหมวด ไม่บันทึกเอง — ทุกรายการยังไปที่สถานะ "รอตรวจ"</dd>
+    <dt>ทำงานตอนไหน</dt><dd>ทันทีที่แนบหลักฐานการชำระเงิน (ปิดอัตโนมัติได้ในหน้าตั้งค่า) ถ้ารูปแรกไม่ใช่สลิปลองรูปถัดไปให้เอง สูงสุด 3 รูป</dd>
+    <dt>ปิด/เปิด</dt><dd>ชีตตั้งค่า <code>AI_OCR = off</code> · ไม่มี <code>OPENAI_API_KEY</code> = แอปบอกว่า AI ยังไม่พร้อม แล้วให้กรอกเอง</dd>
+  </dl>
+</section>
+
+<section id="drive">
+  <h2>4. Google Drive และไฟล์ PDF</h2>
+  <p class="lead">หนึ่งรายการ = หนึ่งไฟล์ PDF ในโฟลเดอร์ของหมวดหมู่นั้น ใต้โฟลเดอร์หลัก <code>TESR Ledger — หลักฐานรายจ่าย</code> (setup สร้างให้ ย้ายไปไดรฟ์แชร์ได้ด้วยการใส่ ID ในชีตตั้งค่า)</p>
+<div class="tree"><span class="d">TESR Ledger — หลักฐานรายจ่าย/</span>
+├── <span class="d">ค่าสินค้า (ซื้อมาขายไป)/</span>
+│   └── <span class="d">2026/</span>
+│       └── <span class="d">2026-08/</span>
+│           └── 2026-08-10_EXP-2026-0042_<span class="u">ซัน</span>_Taobao_23908.72.pdf
+├── <span class="d">ค่าขนส่งสินค้า/</span>
+│   └── <span class="d">2026/</span>
+│       └── <span class="d">2026-09/</span>
+│           └── 2026-09-10_EXP-2026-0043_<span class="u">ฝ้าย</span>_Kerry-Express_350.00.pdf
+└── <span class="d">ค่าเดินทาง-ที่พัก/</span> …</div>
+
+  <h3>ส่วนประกอบของชื่อไฟล์</h3>
+  <div class="anatomy">
+    <div class="name"><span class="seg1">2026-08-10</span>_<span class="seg2">EXP-2026-0042</span>_<span class="seg3">ซัน</span>_<span class="seg4">Taobao</span>_<span class="seg5">23908.72</span>.pdf</div>
+    <div class="legend">
+      <div><b style="background:#F2EFE8"></b>วันที่จ่าย (ปี-เดือน-วัน)</div>
+      <div><b style="background:#C9A84C"></b>เลขรายการในชีต (คอลัมน์ A)</div>
+      <div><b style="background:#FF8A80"></b>ผู้บันทึก (คอลัมน์ E)</div>
+      <div><b style="background:#7EC8FF"></b>ร้าน/ผู้รับเงิน (คอลัมน์ K) ถ้าระบุ</div>
+      <div><b style="background:#A8E6A1"></b>จำนวนเงิน (คอลัมน์ L)</div>
+    </div>
+  </div>
+
+  <h3>ข้างในไฟล์ PDF</h3>
+  <div class="tblwrap"><table>
+    <tr><th>หน้า</th><th>มีใบเสร็จ</th><th>ไม่มีใบเสร็จ</th></tr>
+    <tr><td>1</td><td>หน้าหลักฐาน: หัวกระดาษ (วันที่ ผู้บันทึก หมวด ยอด) + ใบเสร็จ</td><td><b>ใบปะหน้า</b>: ชื่อผู้ขอเบิก แผนก วันที่ ประเภท (☑) ตารางรายการและจำนวนเงิน ยอดตัวอักษร ลายเซ็นผู้ขอเบิก + ลายเซ็นผู้อนุมัติ อานนท์ หม้อสุวรรณ พร้อมชื่อพิมพ์ใต้ลายเซ็น</td></tr>
+    <tr><td>2…</td><td>หลักฐานการจ่าย (ยอดบาท) · หลักฐานตอนโอนสกุลต่างประเทศ (ถ้ามี)</td><td>หลักฐานการจ่าย (ยอดบาท เช่น รายการเดินบัญชี ฿23,908.72) · หลักฐานตอนโอนสกุลต่างประเทศ (เช่น Alipay ¥4,738) · รูปสินค้า/หลักฐานอื่น — แต่ละรูปมีป้ายบอกประเภท</td></tr>
+    <tr><td>ท้าย</td><td colspan="2">ไฟล์ PDF ที่แนบมา (เช่น e-Receipt) ต่อท้ายทั้งหน้า</td></tr>
+  </table></div>
+  <ul>
+    <li>รูปย่อให้ด้านยาวไม่เกิน 1,600 px ทุกหน้าเป็น A4 150 dpi ไฟล์ทั่วไป 0.5–3 MB</li>
+    <li>ชีตตั้งค่า <code>DRIVE_LAYOUT = day</code> เพิ่มโฟลเดอร์รายวันใต้เดือน</li>
+    <li>อักขระที่ใช้ในชื่อไฟล์ไม่ได้ (<code>/ \ : * ? " &lt; &gt; |</code>) ถูกแทนด้วย <code>-</code> ชื่อร้านตัดที่ 40 ตัวอักษร</li>
+  </ul>
+</section>
+
+<section id="who">
+  <h2>5. ฐานข้อมูล CSV บน GitHub</h2>
+  <div class="tblwrap"><table>
+    <tr><th>ไฟล์</th><th>คอลัมน์</th><th>ใช้ทำอะไร</th></tr>
+    <tr><td><b>staff.csv</b></td><td>ชื่อเล่น · ชื่อ-นามสกุล · แผนก · ไฟล์ลายเซ็น · บทบาท (staff / intern / approver)</td><td>ปุ่มชื่อในขั้นที่ 1 · ชื่อและลายเซ็นบนใบปะหน้า · บทบาท approver = ผู้อนุมัติที่ใส่ให้อัตโนมัติ (ฝ้าย = อานนท์ หม้อสุวรรณ) · จู = Admin / เลขา / บัญชี</td></tr>
+    <tr><td><b>categories.csv</b></td><td>หมวดหมู่ · โฟลเดอร์ใน Drive · ประเภทในใบปะหน้า · ตัวอย่าง</td><td>ปุ่มหมวดในขั้นที่ 3 · โฟลเดอร์ปลายทาง · ช่อง ☑ ที่ติ๊กในใบปะหน้า</td></tr>
+    <tr><td><b>signatures/</b></td><td>ไฟล์ PNG พื้นโปร่ง</td><td>ลายเซ็นของแต่ละคน อ้างจากคอลัมน์ไฟล์ลายเซ็น</td></tr>
+  </table></div>
+  <p>แก้ไฟล์บน GitHub (Edit → Commit) แอปโหลดใหม่ทุกครั้งที่เปิด ถ้าโหลดไม่ได้ใช้สำเนาล่าสุดที่จำไว้ในเครื่อง คนที่ไม่มีไฟล์ลายเซ็นจะได้ช่องวาดลายเซ็นในแอปแทน</p>
+</section>
+
+<section id="status">
+  <h2>6. สถานะและหน้าที่ของแต่ละคน</h2>
+  <div class="tblwrap"><table>
+    <tr><th>สถานะบัญชี</th><th>หมายถึง</th><th>ใครเปลี่ยน</th></tr>
+    <tr><td>รอตรวจ</td><td>ทุกรายการที่เพิ่งบันทึก</td><td class="who">ระบบ</td></tr>
+    <tr><td>ตรวจแล้ว</td><td>บัญชีดู PDF และหมวดครบแล้ว รอลง FlowAccount</td><td class="who">บัญชี</td></tr>
+    <tr><td>บันทึกบัญชีแล้ว</td><td>ลงบัญชีเรียบร้อย</td><td class="who">บัญชี</td></tr>
+    <tr><td>ตีกลับ</td><td>ขาดหลักฐานหรือข้อมูลผิด เขียนเหตุผลในคอลัมน์ S พนักงานเห็นในแอปแล้วบันทึกรายการใหม่ให้ถูกต้อง</td><td class="who">บัญชี</td></tr>
+  </table></div>
+  <dl class="kv">
+    <dt>พนักงาน</dt><dd>บันทึกทันทีที่จ่าย แนบสลิปที่เห็นยอดบาท ตรวจช่องสีทองที่ AI เติม ดูตัวอย่างเอกสารก่อนยืนยัน</dd>
+    <dt>ผู้อนุมัติ</dt><dd>ฝ้าย (อานนท์ หม้อสุวรรณ) — ลายเซ็นใส่ให้อัตโนมัติบนใบปะหน้า ตรวจภาพรวมจาก Dashboard</dd>
+    <dt>ฝ่ายบัญชี</dt><dd>ตรวจแถวรอตรวจ เปิด PDF ลง FlowAccount เปลี่ยนสถานะ จ่ายคืนพนักงานตามคอลัมน์สถานะเบิกคืน</dd>
+    <dt>ผู้ดูแลระบบ</dt><dd>ดูแล staff.csv / categories.csv / ชีตตั้งค่า Deploy Apps Script เวอร์ชันใหม่เมื่อแก้โค้ด</dd>
+  </dl>
+</section>
+
+<p class="foot">TESR Ledger v2.1.0 — Google Sign-In + หน้าเว็บ (GitHub Pages) + Google Apps Script + Google Sheet + Google Drive + OpenAI (เฉพาะอ่านสลิป) · Thai Embedded System and Robotics Co., Ltd.</p>
+</div>
+<script>
+document.getElementById('flowLogo').src = 'data:image/png;base64,' +
+  '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';
+</script>
+</body>
+</html>
