@@ -29,6 +29,7 @@ a{color:var(--gold2)}
 .mono{font-family:var(--fd)}
 .muted{color:var(--muted)} .gold{color:var(--gold2)} .err-t{color:#FF8A80} .ok-t{color:#6FD39A}
 .hidden{display:none!important}
+[hidden]{display:none!important}   /* ปุ่ม/แถบที่ตั้ง hidden ต้องหายจริง แม้คลาสจะกำหนด display ไว้ */
 
 /* ---------- login gate ---------- */
 .gate{max-width:28rem;margin:2.5rem auto 0;text-align:center}
