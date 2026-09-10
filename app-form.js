@@ -13,7 +13,35 @@ function renderStep4() {
   const pay = state.pay || (yes ? 'บริษัท' : 'ส่วนตัว (ขอเบิกคืน)');
   setPay(pay);
   renderThumbs('receipt'); renderThumbs('pay'); renderThumbs('fx'); renderThumbs('other');
+  mountSlipPanel();
   aiIdle();
+}
+/* ---------- slip data panel (ข้อมูลที่ AI อ่านจากสลิป) ---------- */
+const SLIP_FIELDS = { type: 'slipType', payer: 'slipPayer', payee: 'slipPayee', amount: 'slipAmount', date: 'slipDate', time: 'slipTime', ref: 'slipRef', bank: 'slipBank', memo: 'slipMemo' };
+function mountSlipPanel() {
+  const host = $(state.hasReceipt === 'yes' ? 'slipHostA' : 'slipHostB'); const panel = $('slipData');
+  if (panel.parentNode !== host) host.appendChild(panel);
+  if (!state.files.pay.length && !state.ai) clearSlip();
+  if (state.ai && state.ai.is_slip) panel.classList.remove('hidden');
+}
+function showSlipPanel() { $('slipData').classList.remove('hidden'); $$('#btnSlipManual, #btnSlipManualB').forEach(b => b.classList.add('hidden')); }
+function clearSlip() { Object.values(SLIP_FIELDS).forEach(id => { const el = $(id); if (el) { el.value = ''; el.classList.remove('ai', 'bad'); } }); $('slipData').classList.add('hidden'); $$('#btnSlipManual, #btnSlipManualB').forEach(b => b.classList.remove('hidden')); }
+document.addEventListener('DOMContentLoaded', () => {
+  $$('#btnSlipManual, #btnSlipManualB').forEach(b => b.onclick = () => { showSlipPanel(); if (!$('slipType').value) $('slipType').value = state.pay === 'ส่วนตัว (ขอเบิกคืน)' ? 'สลิปพนักงานโอนไปก่อน' : 'สลิปโอนเงิน (บัญชีบริษัท)'; $('slipPayer').focus(); });
+  Object.values(SLIP_FIELDS).forEach(id => { const el = $(id); if (el) el.oninput = () => el.classList.remove('ai', 'bad'); });
+});
+function slipModel() {
+  const g = id => ($(id) ? $(id).value : '').trim();
+  const o = {}; Object.keys(SLIP_FIELDS).forEach(k => { o[k] = g(SLIP_FIELDS[k]); });
+  o.amount = o.amount ? r2(num(o.amount)) : '';
+  return o;
+}
+function fillSlip(r) {
+  const yes = state.hasReceipt === 'yes';
+  const defType = r.doc_type || (state.pay === 'ส่วนตัว (ขอเบิกคืน)' ? 'สลิปพนักงานโอนไปก่อน' : 'สลิปโอนเงิน (บัญชีบริษัท)');
+  const vals = { type: defType, payer: r.payer, payee: r.payee, amount: r.amount > 0 && (!r.currency || r.currency === 'THB') ? r2(r.amount) : '', date: r.date, time: r.time, ref: r.ref, bank: r.payee_bank, memo: r.memo };
+  Object.keys(vals).forEach(k => { const el = $(SLIP_FIELDS[k]); const v = String(vals[k] == null ? '' : vals[k]).trim(); el.value = v; el.classList.toggle('ai', !!v); });
+  showSlipPanel();
 }
 function setPay(v) { state.pay = v; $$('#payChips .chip, #payChipsB .chip').forEach(b => b.classList.toggle('on', b.dataset.p === v)); if (state.who) lsSet(LS.pay + state.who.nick, v); }
 function setCoverType(t) { state.coverType = t; $$('#ctChips .chip').forEach(b => b.classList.toggle('on', b.dataset.t === t)); $('ctLbl').textContent = CT_LABEL[t] || 'ระบุ'; $('ctLbl').classList.toggle('req', t !== 'ค่าพาหนะ'); $('ctDetail').placeholder = CT_PH[t] || ''; }
@@ -58,7 +86,7 @@ async function addFiles(group, fileList) {
   renderThumbs(group); state.pages = []; state.pdf = null;
   if (group === 'pay' && state.cfg.ai && state.autoAI && !(state.ai && state.ai.is_slip)) runAI();
 }
-function thumbBox(group) { const b = state.hasReceipt === 'yes' ? '' : '-b'; return $(group === 'pay' ? 'th-pay' + b : group === 'fx' ? 'th-fx' + b : 'th-' + group); }
+function thumbBox(group) { const b = state.hasReceipt === 'yes' ? '' : '-b'; return $(group === 'pay' ? 'th-pay' + b : group === 'fx' ? 'th-fx' + b : group === 'other' ? 'th-other' + b : 'th-' + group); }
 function renderThumbs(group) {
   const box = thumbBox(group); if (!box) return;
   const list = state.files[group];
@@ -67,7 +95,7 @@ function renderThumbs(group) {
   ['th-pay', 'th-pay-b', 'th-fx', 'th-fx-b'].forEach(id => { const el = $(id); if (el && el !== box && ((group === 'pay' && id.startsWith('th-pay')) || (group === 'fx' && id.startsWith('th-fx')))) el.innerHTML = ''; });
 }
 function aiIdle() {
-  const t = !state.cfg.ai ? (state.cfg.aiOn === false ? 'AI ปิดอยู่ — กรอกยอดเอง' : (state.apiUrl ? 'AI ยังไม่พร้อม (ไม่มี OPENAI_API_KEY) — กรอกยอดเอง' : '')) : 'แนบสลิปยอดบาทแล้ว AI จะอ่านยอด วันที่ ผู้รับเงินให้ตรวจ';
+  const t = !state.cfg.ai ? (state.cfg.aiOn === false ? 'AI ปิดอยู่ — กรอกยอดเอง หรือกด "กรอกข้อมูลสลิปเอง"' : (state.apiUrl ? 'AI ยังไม่พร้อม (ไม่มี OPENAI_API_KEY) — กรอกยอดเอง หรือกด "กรอกข้อมูลสลิปเอง"' : '')) : 'แนบสลิปแล้ว AI Vision จะอ่านผู้โอน ผู้รับ ยอด วันที่-เวลา Transaction ID ให้ตรวจก่อนบันทึก';
   $('aiStat').textContent = t; $('aiStatB').textContent = t;
 }
 function aiSay(html) { $('aiStat').innerHTML = html; $('aiStatB').innerHTML = html; }
@@ -99,6 +127,7 @@ function applyAI(r) {
   if (r.payee) setIf(yes ? 'vendor' : 'bvendor', r.payee, 'ผู้รับเงิน');
   const refBits = []; if (r.ref) refBits.push('อ้างอิง ' + r.ref); if (r.payer_bank) refBits.push('จาก ' + r.payer_bank); if (r.payee_bank) refBits.push('เข้า ' + r.payee_bank); if (r.time) refBits.push('เวลา ' + r.time);
   if (refBits.length) setIf(yes ? 'note' : 'bnote', 'สลิป: ' + refBits.join(' · '), 'อ้างอิงสลิป');
+  fillSlip(r); filled.push('ข้อมูลสลิป');
   const conf = Math.round((num(r.confidence) || 0) * 100);
   const warn = foreign ? banner('warn', r.currency, 'รูปนี้เป็นสกุล <b>' + esc(r.currency) + '</b> ' + money(r.amount) + ' — ย้ายไปช่อง "หลักฐานตอนโอนเป็นสกุลต่างประเทศ" แล้วแนบรายการเดินบัญชี/บัตรที่เห็น<b>ยอดบาท</b>ในช่องนี้ และกรอกยอดบาทที่ถูกตัดจริง') : '';
   $('aiBanner').innerHTML = warn; $('aiBannerB').innerHTML = warn;
@@ -140,6 +169,7 @@ function model() {
     desc: yes ? $('desc').value.trim() : items.map(it => it.desc).join(' · '), items: items, amount: amount,
     coverType: yes ? '' : state.coverType, ctDetail: yes ? '' : $('ctDetail').value.trim(), pay: state.pay,
     note: (yes ? $('note').value : $('bnote').value).trim(),
+    slip: slipModel(),
     files: state.files,
   };
 }
