@@ -1,12 +1,13 @@
 /* ============================================================================
-   TESR Ledger — Backend (Google Apps Script)   v2.2.0 · กันยายน 2026
+   TESR Ledger — Backend (Google Apps Script)   v2.3.0 · กันยายน 2026
    ----------------------------------------------------------------------------
    หน้าที่ (หลังบ้านของ index.html)
    · รับเอกสาร PDF ที่แอปรวมให้แล้ว (ใบปะหน้า + ใบเสร็จ + สลิป) → เก็บลง Google Drive
      ตามโฟลเดอร์ ปี / เดือน / หมวดค่าใช้จ่าย  ชื่อไฟล์ = วันที่_เลขรายการ_ผู้บันทึก_ผู้ขาย_ยอด.pdf
    · บันทึก 1 แถวต่อรายการใน "ชีตของเดือนนั้น" (ชื่อชีต = ปี-เดือน เช่น 2026-09 · สร้างให้อัตโนมัติ
      จากชีตแม่แบบเมื่อมีรายการแรกของเดือน) — เดือนละชีต ตรวจสอบง่าย ไม่ปนกัน · ลิงก์ PDF แสดงเป็นชื่อไฟล์
-   · AI OCR (OpenAI) อ่านสลิปโอนเงิน → ยอด วันที่ ผู้รับเงิน (เฉพาะสลิป)
+   · AI Vision (OpenAI) อ่านสลิปโอนเงินออกจากบริษัท → ประเภทเอกสาร ผู้โอน ผู้รับ ยอด วันที่ เวลา Transaction ID
+     บันทึกช่วยจำ ธนาคารปลายทาง → เก็บในคอลัมน์ W–AF ของชีตเดือน และรวมเป็นทะเบียน "โอนเงินออก" (สูตร QUERY ข้ามทุกเดือน)
    · Dashboard รายเดือน ตามหมวด ตามผู้บันทึก รอตรวจ รอจ่ายคืน · แจ้งเตือนอีเมล
    · ตรวจการเข้าสู่ระบบด้วย Google: รับ ID token จากแอป → ตรวจกับ Google → อนุญาตเฉพาะอีเมลใน ALLOWED_EMAILS
 
@@ -24,20 +25,23 @@
    ชีต "ตั้งค่า": GOOGLE_CLIENT_ID (OAuth Client ID เดียวกับใน index.html) และ ALLOWED_EMAILS
 ============================================================================ */
 
-const APP = { name: 'TESR Ledger', version: '2.2.0' };
+const APP = { name: 'TESR Ledger', version: '2.3.0' };
 const TZ = 'Asia/Bangkok';
-const SHEET = { SET: 'ตั้งค่า', DASH: 'Dashboard', TPL: 'แม่แบบ', LEGACY: 'รายจ่าย' };   // ชีตรายเดือนชื่อ ปี-เดือน เช่น 2026-09
+const SHEET = { SET: 'ตั้งค่า', DASH: 'Dashboard', REG: 'โอนเงินออก', TPL: 'แม่แบบ', LEGACY: 'รายจ่าย' };   // ชีตรายเดือนชื่อ ปี-เดือน เช่น 2026-09
 
-// คอลัมน์ของชีตรายเดือน (A → V) — ห้ามสลับ Dashboard อ้างอิงตามตัวอักษรคอลัมน์
+// คอลัมน์ของชีตรายเดือน (A → AF) — ห้ามสลับ Dashboard/ทะเบียนอ้างอิงตามตัวอักษรคอลัมน์
 const HEADERS = [
   'ID', 'บันทึกเมื่อ', 'วันที่จ่าย', 'งวด', 'ผู้บันทึก',                         // A-E
   'ชื่อ-นามสกุล', 'แผนก', 'ใบเสร็จ', 'หมวดหมู่', 'รายละเอียด',                 // F-J
   'ร้าน/ผู้รับเงิน', 'จำนวนเงิน (บาท)', 'จ่ายโดย', 'สถานะเบิกคืน', 'เอกสาร PDF',   // K-O
   'จำนวนหน้า', 'สถานะบัญชี', 'หมายเหตุผู้บันทึก', 'หมายเหตุบัญชี', 'ผู้อนุมัติ',    // P-T
   'ประเภท/เหตุผล (ใบปะหน้า)', 'บัญชี Google ที่ล็อกอิน',                       // U-V
+  'ประเภทเอกสาร (สลิป)', 'ชื่อผู้โอน', 'ชื่อผู้รับเงิน (สลิป)', 'จำนวนเงินตามสลิป', 'วันที่โอนเงิน',   // W-AA  ← ข้อมูลจากสลิป (AI Vision)
+  'เวลาโอนเงิน', 'Transaction ID', 'บันทึกช่วยจำ (สลิป)', 'โอนเข้าธนาคาร', 'ลิงก์ PDF',           // AB-AF
 ];
-const COL = { ID: 0, TS: 1, DATE: 2, PERIOD: 3, BY: 4, FULLNAME: 5, DEPT: 6, RECEIPT: 7, CAT: 8, DESC: 9, VENDOR: 10, AMOUNT: 11, PAY: 12, REIMB: 13, PDF: 14, PAGES: 15, STATUS: 16, NOTE: 17, ACCNOTE: 18, APPROVER: 19, COVER: 20, LOGIN: 21 };
-const ROW_FORMATS = HEADERS.map((h, i) => i === COL.TS ? 'yyyy-mm-dd hh:mm' : i === COL.DATE ? 'yyyy-mm-dd' : i === COL.AMOUNT ? '#,##0.00' : i === COL.PAGES ? '0' : '@');
+const COL = { ID: 0, TS: 1, DATE: 2, PERIOD: 3, BY: 4, FULLNAME: 5, DEPT: 6, RECEIPT: 7, CAT: 8, DESC: 9, VENDOR: 10, AMOUNT: 11, PAY: 12, REIMB: 13, PDF: 14, PAGES: 15, STATUS: 16, NOTE: 17, ACCNOTE: 18, APPROVER: 19, COVER: 20, LOGIN: 21,
+  STYPE: 22, SPAYER: 23, SPAYEE: 24, SAMOUNT: 25, SDATE: 26, STIME: 27, SREF: 28, SMEMO: 29, SBANK: 30, URL: 31 };
+const ROW_FORMATS = HEADERS.map((h, i) => i === COL.TS ? 'yyyy-mm-dd hh:mm' : i === COL.DATE ? 'yyyy-mm-dd' : i === COL.AMOUNT || i === COL.SAMOUNT ? '#,##0.00' : i === COL.PAGES ? '0' : '@');
 
 const RECEIPT = { YES: 'มีใบเสร็จ', NO: 'ไม่มีใบเสร็จ (ใบปะหน้า)' };
 const PAY = { COMPANY: 'บริษัท', PERSONAL: 'ส่วนตัว (ขอเบิกคืน)' };
@@ -189,6 +193,12 @@ function submit_(req, login) {
     row[COL.APPROVER] = str_(req.approver) || str_(s.APPROVER_NAME);
     row[COL.COVER] = str_(req.coverType);
     row[COL.LOGIN] = login ? login.email : '';
+    const slip = req.slip || {};                                   // ข้อมูลที่ AI Vision อ่านจากสลิป (ผู้ใช้ตรวจ/แก้แล้ว)
+    row[COL.STYPE] = str_(slip.type); row[COL.SPAYER] = str_(slip.payer); row[COL.SPAYEE] = str_(slip.payee);
+    row[COL.SAMOUNT] = num_(slip.amount) > 0 ? r2_(num_(slip.amount)) : '';
+    row[COL.SDATE] = str_(slip.date); row[COL.STIME] = str_(slip.time); row[COL.SREF] = str_(slip.ref);
+    row[COL.SMEMO] = str_(slip.memo); row[COL.SBANK] = str_(slip.bank);
+    ensureColumns_(sheet);
     sheet.getRange(rowIndex, 1, 1, HEADERS.length).setNumberFormats([ROW_FORMATS]).setValues([row]);
   } finally { lock.releaseLock(); }
 
@@ -198,6 +208,7 @@ function submit_(req, login) {
   if (str_(s.RECEIPT_SHARE) === 'link') file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   const link = { name: name, url: file.getUrl(), id: file.getId() };
   setLink_(sheet, rowIndex, COL.PDF, link);
+  sheet.getRange(rowIndex, COL.URL + 1).setValue(link.url);
 
   const vals = sheet.getRange(rowIndex, 1, 1, HEADERS.length).getValues()[0];
   const entry = rowToEntry_(vals, rowIndex, link, sheet.getName());
@@ -239,12 +250,30 @@ function orderSheets_() {
   const ss = ss_();
   const put = (sh, pos) => { if (sh) { ss.setActiveSheet(sh); ss.moveActiveSheet(pos); } };
   put(ss.getSheetByName(SHEET.DASH), 1);
-  put(ss.getSheetByName(SHEET.SET), 2);
-  monthSheets_().reverse().forEach((sh, i) => put(sh, 3 + i));
+  put(ss.getSheetByName(SHEET.REG), 2);
+  put(ss.getSheetByName(SHEET.SET), 3);
+  monthSheets_().reverse().forEach((sh, i) => put(sh, 4 + i));
 }
 function monthSheetUrl_(period) {
   const sh = monthSheet_(period, false);
   return ss_().getUrl() + (sh ? '#gid=' + sh.getSheetId() : '');
+}
+/** เติมคอลัมน์/หัวตารางที่ยังไม่มี (ชีตที่สร้างจากเวอร์ชันก่อนมี 22 คอลัมน์) */
+function ensureColumns_(sheet) {
+  const n = HEADERS.length;
+  if (sheet.getMaxColumns() < n) sheet.insertColumnsAfter(sheet.getMaxColumns(), n - sheet.getMaxColumns());
+  const cur = sheet.getRange(1, 1, 1, n).getValues()[0];
+  HEADERS.forEach((h, i) => { if (str_(cur[i]) !== h) sheet.getRange(1, i + 1).setValue(h); });
+  styleHeader_(sheet, n);
+  return sheet;
+}
+function readRows_(sheet) {
+  const last = sheet.getLastRow();
+  if (last < 2) return { values: [], rich: [] };
+  const nc = Math.min(HEADERS.length, sheet.getMaxColumns());
+  const values = sheet.getRange(2, 1, last - 1, nc).getValues().map(r => { while (r.length < HEADERS.length) r.push(''); return r; });
+  const rich = sheet.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
+  return { values: values, rich: rich };
 }
 
 // ============================================================ Drive
@@ -286,10 +315,7 @@ function linkFromRich_(rt) {
 function scan_() {
   const out = [];
   monthSheets_().forEach(sheet => {
-    const last = sheet.getLastRow();
-    if (last < 2) return;
-    const values = sheet.getRange(2, 1, last - 1, HEADERS.length).getValues();
-    const rich = sheet.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
+    const rows = readRows_(sheet), values = rows.values, rich = rows.rich;
     for (let i = 0; i < values.length; i++) if (str_(values[i][COL.ID])) out.push(rowToEntry_(values[i], i + 2, linkFromRich_(rich[i][0]), sheet.getName()));
   });
   return out;
@@ -323,6 +349,7 @@ function rowToEntry_(r, rowIndex, link, sheetName) {
     vendor: str_(r[COL.VENDOR]), amount: num_(r[COL.AMOUNT]), pay: str_(r[COL.PAY]), reimb: str_(r[COL.REIMB]),
     pdf: link ? link.url : '', pdfName: link ? link.name : '', pages: num_(r[COL.PAGES]),
     status: str_(r[COL.STATUS]), note: str_(r[COL.NOTE]), accNote: str_(r[COL.ACCNOTE]), approver: str_(r[COL.APPROVER]), coverType: str_(r[COL.COVER]), login: str_(r[COL.LOGIN]),
+    slip: { type: str_(r[COL.STYPE]), payer: str_(r[COL.SPAYER]), payee: str_(r[COL.SPAYEE]), amount: num_(r[COL.SAMOUNT]), date: d(r[COL.SDATE]), time: str_(r[COL.STIME]), ref: str_(r[COL.SREF]), memo: str_(r[COL.SMEMO]), bank: str_(r[COL.SBANK]) },
   };
 }
 
@@ -359,9 +386,11 @@ function readSlip_(req) {
     'คุณคือผู้ช่วยฝ่ายบัญชีของ ' + str_(s.COMPANY_NAME) + ' หน้าที่เดียวคืออ่าน "สลิปโอนเงิน/หลักฐานการชำระเงิน" ' +
     '(สลิปธนาคาร พร้อมเพย์ e-Wallet หน้ายืนยันชำระเงินบัตรเครดิต ภาพหน้าจอแอปธนาคาร รายการเดินบัญชี) ตอบเป็น JSON object เท่านั้น ห้ามมี markdown\n' +
     'โครงสร้าง: {"is_slip":true/false (false ถ้าไม่ใช่หลักฐานการชำระเงิน เช่น ใบเสร็จ หน้าคำสั่งซื้อ รูปสินค้า),' +
+    '"doc_type":"ประเภทเอกสาร เช่น สลิปโอนเงินธนาคาร / สลิปพร้อมเพย์ / ยอดตัดบัตรเครดิต / รายการเดินบัญชี / e-Wallet หรือ \\"\\"",' +
+    '"payer":"ชื่อผู้โอน/ชื่อบัญชีต้นทางตามที่ปรากฏ หรือ \\"\\"",' +
     '"amount":ตัวเลขยอดที่โอน/ชำระ (0 ถ้าไม่พบ),"currency":"THB หรือรหัสสกุลเงินอื่น เช่น CNY USD","date":"YYYY-MM-DD หรือ \\"\\"","time":"HH:MM หรือ \\"\\"",' +
     '"payee":"ชื่อผู้รับเงิน/ร้าน/แพลตฟอร์มปลายทาง หรือ \\"\\"","payee_bank":"ธนาคาร/ช่องทางผู้รับ หรือ \\"\\"","payer_bank":"ธนาคาร/แอป/บัตรที่ใช้จ่าย หรือ \\"\\"",' +
-    '"ref":"เลขอ้างอิง/Transaction ID หรือ \\"\\"","fee":ค่าธรรมเนียม (0 ถ้าไม่มี),"confidence":ตัวเลข 0 ถึง 1}\n' +
+    '"ref":"เลขอ้างอิง/Transaction ID หรือ \\"\\"","memo":"บันทึกช่วยจำ/ข้อความบนสลิป หรือ \\"\\"","fee":ค่าธรรมเนียม (0 ถ้าไม่มี),"confidence":ตัวเลข 0 ถึง 1}\n' +
     'กฎ: ปี พ.ศ. แปลงเป็น ค.ศ. (2569 → 2026) · ตัวเลขห้ามมีเครื่องหมายคั่นหลักพัน · ถ้ามีทั้งยอดเงินหยวนและยอดเงินบาทในภาพ ให้ amount เป็นยอดบาท currency THB · ค่าที่ไม่พบใช้ "" หรือ 0';
   const content = [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: 'data:' + mime + ';base64,' + img.data, detail: 'high' } }];
   const model = str_(s.AI_MODEL) || 'gpt-5-mini';
@@ -377,6 +406,7 @@ function readSlip_(req) {
   let obj; try { obj = JSON.parse(t); } catch (e) { throw new Error('AI ตอบกลับไม่ใช่ JSON ที่อ่านได้ — ลองถ่ายรูปให้ชัดขึ้น'); }
   return {
     is_slip: obj.is_slip === true || String(obj.is_slip).toLowerCase() === 'true',
+    doc_type: str_(obj.doc_type), payer: str_(obj.payer), memo: str_(obj.memo),
     amount: r2_(num_(obj.amount)), currency: str_(obj.currency).toUpperCase() || 'THB',
     date: /^\d{4}-\d{2}-\d{2}$/.test(str_(obj.date)) ? str_(obj.date) : '', time: str_(obj.time),
     payee: str_(obj.payee), payee_bank: str_(obj.payee_bank), payer_bank: str_(obj.payer_bank), ref: str_(obj.ref),
@@ -425,6 +455,8 @@ function setup() {
   buildSettings_();
   buildTemplate_();
   buildDashboard_();
+  buildRegister_();
+  monthSheets_().forEach(ensureColumns_);                     // ชีตเดือนจากเวอร์ชันก่อน → เพิ่มคอลัมน์ W–AF
   migrateLegacy_();
   monthSheet_(fmtDate_(new Date(), 'yyyy-MM'), true);
   receiptRoot_(settings_());
@@ -443,14 +475,13 @@ function migrateLegacy_() {
   if (!old) return;
   const last = old.getLastRow();
   if (last < 2) { ss.deleteSheet(old); return; }
-  const values = old.getRange(2, 1, last - 1, HEADERS.length).getValues();
-  const rich = old.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
+  const rows = readRows_(old), values = rows.values, rich = rows.rich;
   let moved = 0;
   values.forEach((row, i) => {
     if (!str_(row[COL.ID])) return;
     const period = str_(row[COL.PERIOD]) || (row[COL.DATE] instanceof Date ? fmtDate_(row[COL.DATE], 'yyyy-MM') : str_(row[COL.DATE]).slice(0, 7));
     if (!isMonthName_(period)) return;
-    const sh = monthSheet_(period, true);
+    const sh = ensureColumns_(monthSheet_(period, true));
     const r = sh.getLastRow() + 1;
     sh.getRange(r, 1, 1, HEADERS.length).setNumberFormats([ROW_FORMATS]).setValues([row]);
     sh.getRange(r, COL.PDF + 1).setRichTextValue(rich[i][0]);
@@ -498,7 +529,7 @@ function buildTemplate_() {
   const rows = Math.max(sh.getMaxRows() - 1, 1);
   const formats = []; for (let i = 0; i < rows; i++) formats.push(ROW_FORMATS);
   sh.getRange(2, 1, rows, n).setNumberFormats(formats);
-  [120, 130, 100, 70, 90, 170, 90, 150, 240, 300, 180, 120, 130, 100, 360, 70, 120, 220, 220, 150, 220, 220].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  [120, 130, 100, 70, 90, 170, 90, 150, 240, 300, 180, 120, 130, 100, 360, 70, 120, 220, 220, 150, 220, 220, 170, 200, 200, 120, 110, 80, 200, 220, 150, 260].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.getRange('O2:O').setWrap(true);
   const dvList = list => SpreadsheetApp.newDataValidation().requireValueInList(list, true).setAllowInvalid(true).build();
   sh.getRange('Q2:Q').setDataValidation(dvList([STATUS.NEW, STATUS.CHECKED, STATUS.DONE, STATUS.RETURNED]));
@@ -568,6 +599,31 @@ function refreshDashboardMonths_() {
   if (months.length) sh.getRange(2, 26, months.length, 1).setValues(months.map(m => [m.getName()]));
   sh.getRange('B2').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sh.getRange('Z2:Z100'), true).setAllowInvalid(true).build());
   sh.hideColumns(26);
+  refreshRegister_();
+}
+
+// ============================================================ ทะเบียน "โอนเงินออก" — รวมสลิปที่บริษัทโอนเงินออกจากทุกเดือน (สูตร QUERY อ่านอย่างเดียว)
+const REG_HEADERS = ['ID', 'ผู้บันทึก', 'ประเภทเอกสาร', 'ชื่อผู้โอน', 'ชื่อผู้รับเงิน', 'จำนวนเงิน', 'วันที่โอนเงิน', 'เวลาโอนเงิน', 'Transaction ID', 'บันทึกช่วยจำ', 'โอนเข้าธนาคาร', 'link เอกสารรวมหลักฐาน', 'หมวดหมู่', 'สถานะบัญชี'];
+function buildRegister_() {
+  const sh = ensureSheet_(SHEET.REG);
+  sh.getRange(1, 1, 1, REG_HEADERS.length).setValues([REG_HEADERS]);
+  styleHeader_(sh, REG_HEADERS.length);
+  sh.setFrozenRows(1); sh.setTabColor('#1F5FA8');
+  [120, 80, 170, 200, 200, 120, 110, 80, 200, 220, 150, 260, 200, 120].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  sh.getRange('F2:F').setNumberFormat('#,##0.00');
+  refreshRegister_();
+  return sh;
+}
+/** สูตร: รวมแถวจากชีตเดือนทั้งหมด เฉพาะที่จ่ายโดย "บริษัท" (เงินออกจาก TESR) เรียงวันที่โอนใหม่ → เก่า — เรียกใหม่ทุกครั้งที่มีชีตเดือนใหม่ */
+function refreshRegister_() {
+  const sh = ss_().getSheetByName(SHEET.REG);
+  if (!sh) return;
+  const months = monthSheets_();
+  const A2 = sh.getRange('A2');
+  if (!months.length) { A2.setValue('ยังไม่มีชีตเดือน — รายการแรกที่บันทึกจะปรากฏที่นี่'); return; }
+  const src = '{' + months.map(m => "'" + m.getName() + "'!A2:AF").join(';') + '}';
+  // Col1=ID Col5=ผู้บันทึก Col9=หมวดหมู่ Col13=จ่ายโดย Col17=สถานะบัญชี Col23..Col31=ข้อมูลสลิป Col32=ลิงก์ PDF
+  A2.setFormula('=IFERROR(QUERY(' + src + ',"select Col1,Col5,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col9,Col17 where Col1 is not null and Col13 = \'' + PAY.COMPANY + '\' order by Col27 desc, Col1 desc",0),"ยังไม่มีรายการที่บริษัทโอนเงินออก")');
 }
 
 function styleHeader_(sh, n) {
