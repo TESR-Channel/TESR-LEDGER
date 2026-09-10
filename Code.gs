@@ -1,9 +1,9 @@
 /* ============================================================================
-   TESR Ledger — Backend (Google Apps Script)   v2.1.0 · กันยายน 2026
+   TESR Ledger — Backend (Google Apps Script)   v2.1.1 · กันยายน 2026
    ----------------------------------------------------------------------------
    หน้าที่ (หลังบ้านของ index.html)
    · รับเอกสาร PDF ที่แอปรวมให้แล้ว (ใบปะหน้า + ใบเสร็จ + สลิป) → เก็บลง Google Drive
-     ตามโฟลเดอร์หมวดค่าใช้จ่าย / ปี / ปี-เดือน  ชื่อไฟล์ = วันที่_เลขรายการ_ผู้บันทึก_ผู้ขาย_ยอด.pdf
+     ตามโฟลเดอร์ ปี / เดือน / หมวดค่าใช้จ่าย  ชื่อไฟล์ = วันที่_เลขรายการ_ผู้บันทึก_ผู้ขาย_ยอด.pdf
    · บันทึก 1 แถวต่อรายการในชีต "รายจ่าย" (ลิงก์ PDF แสดงเป็นชื่อไฟล์)
    · AI OCR (OpenAI) อ่านสลิปโอนเงิน → ยอด วันที่ ผู้รับเงิน (เฉพาะสลิป)
    · Dashboard รายเดือน ตามหมวด ตามผู้บันทึก รอตรวจ รอจ่ายคืน · แจ้งเตือนอีเมล
@@ -23,7 +23,7 @@
    ชีต "ตั้งค่า": GOOGLE_CLIENT_ID (OAuth Client ID เดียวกับใน index.html) และ ALLOWED_EMAILS
 ============================================================================ */
 
-const APP = { name: 'TESR Ledger', version: '2.1.0' };
+const APP = { name: 'TESR Ledger', version: '2.1.1' };
 const TZ = 'Asia/Bangkok';
 const SHEET = { EXP: 'รายจ่าย', SET: 'ตั้งค่า', DASH: 'Dashboard' };
 
@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS = [
   ['APPROVER_NAME', 'อานนท์ หม้อสุวรรณ', 'ชื่อผู้อนุมัติที่บันทึกในชีต (ลายเซ็นและชื่อบนใบปะหน้าใช้จาก staff.csv บทบาท approver)'],
   ['RECEIPT_FOLDER_ID', '', 'โฟลเดอร์ Google Drive หลัก (setup สร้างให้ · ใส่ ID โฟลเดอร์แชร์ของบริษัทแทนได้)'],
   ['RECEIPT_SHARE', 'private', 'private = เฉพาะคนที่ได้รับแชร์โฟลเดอร์ · link = ทุกคนที่มีลิงก์เปิดดูได้'],
-  ['DRIVE_LAYOUT', 'month', 'โฟลเดอร์ใต้หมวดหมู่: month = ปี/ปี-เดือน · day = ปี/ปี-เดือน/ปี-เดือน-วัน'],
+  ['DRIVE_LAYOUT', 'month', 'โครงสร้างโฟลเดอร์: month = ปี/เดือน/หมวดหมู่ · day = ปี/เดือน/วัน/หมวดหมู่'],
   ['RECENT_LIMIT', 200, 'จำนวนรายการล่าสุดที่แอปโหลด'],
   ['NOTIFY_MODE', 'none', 'none = ไม่แจ้ง · each = อีเมลทุกรายการ · daily = สรุปรายวัน 18:00 (รัน installTriggers ก่อน)'],
   ['NOTIFY_EMAIL', '', 'อีเมลฝ่ายบัญชี (หลายคนคั่นด้วย ,)'],
@@ -190,7 +190,7 @@ function submit_(req, login) {
     sheet.getRange(rowIndex, 1, 1, HEADERS.length).setNumberFormats([ROW_FORMATS]).setValues([row]);
   } finally { lock.releaseLock(); }
 
-  // ---- PDF → Drive: หมวดหมู่ / ปี / ปี-เดือน / วันที่_ID_ผู้บันทึก_ผู้ขาย_ยอด.pdf
+  // ---- PDF → Drive: ปี / เดือน / หมวดหมู่ / วันที่_ID_ผู้บันทึก_ผู้ขาย_ยอด.pdf
   const name = dateStr + '_' + id + '_' + slug_(by, 30) + (vendor ? '_' + slug_(vendor, 40) : '') + '_' + amount.toFixed(2) + '.pdf';
   const file = entryFolder_(s, folder, dateStr).createFile(Utilities.newBlob(Utilities.base64Decode(pdf.data), 'application/pdf', name));
   if (str_(s.RECEIPT_SHARE) === 'link') file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -223,10 +223,10 @@ function receiptRoot_(s) {
   return folder;
 }
 function entryFolder_(s, category, dateStr) {
-  let f = childFolder_(receiptRoot_(s), folderName_(category));
-  f = childFolder_(childFolder_(f, dateStr.slice(0, 4)), dateStr.slice(0, 7));
-  if (str_(s.DRIVE_LAYOUT).toLowerCase() === 'day') f = childFolder_(f, dateStr.slice(0, 10));
-  return f;
+  let f = childFolder_(receiptRoot_(s), dateStr.slice(0, 4));                          // ปี  เช่น 2026
+  f = childFolder_(f, dateStr.slice(5, 7));                                             // เดือน เช่น 08
+  if (str_(s.DRIVE_LAYOUT).toLowerCase() === 'day') f = childFolder_(f, dateStr.slice(8, 10)); // วัน (ถ้าเลือก day)
+  return childFolder_(f, folderName_(category));                                        // หมวดหมู่
 }
 function childFolder_(parent, name) {
   const it = parent.getFoldersByName(name);
