@@ -115,7 +115,7 @@ li{margin-bottom:4px}
     <div class="trio">
       <div class="node"><b>หน้าเว็บ</b><small>index.html + staff.csv + categories.csv<br>บน GitHub Pages</small></div>
       <div class="arrow">→</div>
-      <div class="node"><b>Google Sheet</b><small>ชีต "รายจ่าย" 1 แถวต่อรายการ<br>+ Dashboard</small></div>
+      <div class="node"><b>Google Sheet</b><small>เดือนละชีต (2026-09, 2026-10 …)<br>1 แถวต่อรายการ + Dashboard</small></div>
       <div class="arrow">→</div>
       <div class="node"><b>Google Drive</b><small>โฟลเดอร์ ปี / เดือน / หมวดหมู่<br>ไฟล์ PDF เดียวต่อรายการ</small></div>
     </div>
@@ -159,28 +159,29 @@ li{margin-bottom:4px}
     </div>
     <div class="step"><span class="num">6</span>
       <h3>Apps Script เก็บไฟล์และบันทึกแถว</h3>
-      <p>ออกเลข <code>EXP-ปี-ลำดับ</code> → เก็บ PDF ในโฟลเดอร์ <span class="fn">ปี / เดือน / หมวดหมู่</span> ชื่อไฟล์ <span class="fn">วันที่_เลขรายการ_ผู้บันทึก_ร้าน_ยอด.pdf</span> → เขียน 1 แถวในชีต "รายจ่าย" ลิงก์ PDF แสดงเป็นชื่อไฟล์ → อีเมลบัญชี (ถ้าเปิด) → แอปแสดงเลขรายการและลิงก์</p>
+      <p>ออกเลข <code>EXP-ปี-ลำดับ</code> → เก็บ PDF ในโฟลเดอร์ <span class="fn">ปี / เดือน / หมวดหมู่</span> ชื่อไฟล์ <span class="fn">วันที่_เลขรายการ_ผู้บันทึก_ร้าน_ยอด.pdf</span> → เขียน 1 แถวใน<b>ชีตของเดือนที่จ่าย</b> (เช่น <code>2026-09</code> สร้างให้เองถ้ายังไม่มี) ลิงก์ PDF แสดงเป็นชื่อไฟล์ → อีเมลบัญชี (ถ้าเปิด) → แอปแสดงเลขรายการ ชื่อชีต และลิงก์</p>
       <div class="lands"><span class="tag drive">PDF 1 ไฟล์</span><span class="tag sheet">1 แถว</span></div>
     </div>
     <div class="step"><span class="num">7</span>
       <h3>ฝ่ายบัญชีทำงานในชีต</h3>
-      <p>กรองแถว "รอตรวจ" เปิด PDF จากลิงก์ พิมพ์ใบปะหน้าถ้าต้องการลายเซ็นจริง ลง FlowAccount แล้วเปลี่ยนสถานะเป็น "บันทึกบัญชีแล้ว" หรือ "ตีกลับ" พร้อมหมายเหตุ รายการที่จ่ายด้วยเงินส่วนตัวมีสถานะ "รอจ่ายคืน" ให้เปลี่ยนเป็น "จ่ายคืนแล้ว" พนักงานเห็นทุกอย่างในแท็บรายการ</p>
+      <p>เปิดชีตของเดือนที่จะตรวจ กรองแถว "รอตรวจ" เปิด PDF จากลิงก์ พิมพ์ใบปะหน้าถ้าต้องการลายเซ็นจริง ลง FlowAccount แล้วเปลี่ยนสถานะเป็น "บันทึกบัญชีแล้ว" หรือ "ตีกลับ" พร้อมหมายเหตุ รายการที่จ่ายด้วยเงินส่วนตัวมีสถานะ "รอจ่ายคืน" ให้เปลี่ยนเป็น "จ่ายคืนแล้ว" พนักงานเห็นทุกอย่างในแท็บรายการ</p>
       <div class="lands"><span class="tag sheet">สถานะ · Dashboard</span></div>
     </div>
   </div>
 </section>
 
 <section id="sheet">
-  <h2>2. Google Sheet จัดอย่างไร</h2>
-  <p class="lead">3 ชีต ฟังก์ชัน <code>setup</code> สร้างให้ทั้งหมด รันซ้ำได้ไม่ทับข้อมูล รายชื่อและหมวดหมู่ไม่อยู่ในชีต — อยู่ใน CSV บน GitHub</p>
+  <h2>2. Google Sheet จัดอย่างไร — เดือนละชีต</h2>
+  <p class="lead">รายการของแต่ละเดือนอยู่ในชีตของเดือนนั้น (ชื่อ ปี-เดือน ตามวันที่จ่าย) ระบบสร้างจากชีตแม่แบบให้เองเมื่อมีรายการแรก และเรียงแท็บใหม่ → เก่า ฟังก์ชัน <code>setup</code> สร้างโครงทั้งหมด รันซ้ำได้ไม่ทับข้อมูล รายชื่อและหมวดหมู่ไม่อยู่ในชีต — อยู่ใน CSV บน GitHub</p>
   <div class="tblwrap"><table>
     <tr><th>ชีต</th><th>มีอะไร</th><th>ใครแก้</th></tr>
-    <tr><td><b>รายจ่าย</b></td><td>1 แถวต่อรายการ 22 คอลัมน์ (ตารางถัดไป)</td><td class="who">ระบบเขียน · บัญชีแก้สถานะ</td></tr>
+    <tr><td><b>Dashboard</b></td><td>ช่อง B2 เลือกเดือน → รวม จำนวน ไม่มีใบเสร็จ รอตรวจ รอจ่ายคืน · ตามหมวดหมู่ · ตามผู้บันทึก · รายการรอจ่ายคืนของเดือนนั้น · ตาราง "ทุกเดือน" (คอลัมน์ L–Q) พร้อมลิงก์เปิดแต่ละชีต</td><td class="who">สูตรอัตโนมัติ</td></tr>
     <tr><td><b>ตั้งค่า</b></td><td>ชื่อบริษัท ผู้อนุมัติ โฟลเดอร์ Drive รูปแบบโฟลเดอร์ การแชร์ อีเมลแจ้งเตือน AI OCR Google Client ID และอีเมลที่อนุญาต</td><td class="who">ผู้ดูแล</td></tr>
-    <tr><td><b>Dashboard</b></td><td>งวดที่เลือก: รวม จำนวน ไม่มีใบเสร็จ รอตรวจ รอจ่ายคืน · ตามหมวดหมู่ · ตามผู้บันทึก · รายการรอจ่ายคืน</td><td class="who">สูตรอัตโนมัติ</td></tr>
+    <tr><td><b>2026-09, 2026-10, …</b></td><td>1 แถวต่อรายการ 22 คอลัมน์ (ตารางถัดไป) เลขรายการ EXP-ปี-ลำดับ นับต่อเนื่องทั้งปีข้ามชีต</td><td class="who">ระบบเขียน · บัญชีแก้สถานะ</td></tr>
+    <tr><td><b>แม่แบบ</b> (ซ่อน)</td><td>หัวตาราง สี dropdown ความกว้างคอลัมน์ ที่ถูกคัดลอกไปทุกชีตเดือนใหม่</td><td class="who">ผู้ดูแล (แก้แล้วมีผลกับเดือนถัดไป)</td></tr>
   </table></div>
 
-  <h3>ชีต "รายจ่าย" — 22 คอลัมน์ (A ถึง V)</h3>
+  <h3>ชีตรายเดือน — 22 คอลัมน์ (A ถึง V)</h3>
   <div class="tblwrap"><table>
     <tr><th>คอลัมน์</th><th>หัวตาราง</th><th>ตัวอย่าง / ความหมาย</th><th>ที่มา</th></tr>
     <tr class="g"><td colspan="4">รายการและคนบันทึก</td></tr>
@@ -210,7 +211,7 @@ li{margin-bottom:4px}
     <tr><td class="c">U</td><td>ประเภท/เหตุผล (ใบปะหน้า)</td><td>ค่าสินค้าและบริการ: สินค้าใน Taobao</td><td class="who">ขั้นที่ 4</td></tr>
     <tr><td class="c">V</td><td>บัญชี Google ที่ล็อกอิน</td><td>tesrshop@gmail.com — จาก token ที่ตรวจแล้ว ไม่ใช่ค่าที่แอปส่งมา</td><td class="who">ระบบ</td></tr>
   </table></div>
-  <div class="note">แถว "รอตรวจ" สีเหลือง "ตีกลับ" สีแดง "บันทึกบัญชีแล้ว" สีเขียว "ไม่มีใบเสร็จ" สีชมพูอ่อน "รอจ่ายคืน" สีส้ม — กวาดตาได้โดยไม่ต้องกรอง</div>
+  <div class="note">แถว "รอตรวจ" สีเหลือง "ตีกลับ" สีแดง "บันทึกบัญชีแล้ว" สีเขียว "ไม่มีใบเสร็จ" สีชมพูอ่อน "รอจ่ายคืน" สีส้ม — กวาดตาได้โดยไม่ต้องกรอง · ปิดเดือนแล้วชีตของเดือนนั้นก็นิ่ง ไม่มีรายการใหม่เข้ามาปน (ยกเว้นบันทึกย้อนหลังด้วยวันที่จ่ายของเดือนนั้น)</div>
 </section>
 
 <section id="ai">
@@ -294,7 +295,7 @@ li{margin-bottom:4px}
   </dl>
 </section>
 
-<p class="foot">TESR Ledger v2.1.1 — Google Sign-In + หน้าเว็บ (GitHub Pages) + Google Apps Script + Google Sheet + Google Drive + OpenAI (เฉพาะอ่านสลิป) · Thai Embedded System and Robotics Co., Ltd.</p>
+<p class="foot">TESR Ledger v2.2.0 — Google Sign-In + หน้าเว็บ (GitHub Pages) + Google Apps Script + Google Sheet + Google Drive + OpenAI (เฉพาะอ่านสลิป) · Thai Embedded System and Robotics Co., Ltd.</p>
 </div>
 <script>
 document.getElementById('flowLogo').src = 'data:image/png;base64,' +
