@@ -141,7 +141,7 @@ async function approve() {
     }, { timeout: 180000 });
     const e = res.entry; state.recent.unshift(e); lsDel(LS.boot);
     $('doneId').textContent = e.id; $('doneSub').textContent = 'เก็บใน Drive · ' + e.cat + ' · สถานะ "รอตรวจ"';
-    $('doneSumm').innerHTML = [['ไฟล์', '<span class="mono" style="font-size:12px">' + esc(e.pdfName) + '</span>'], ['โฟลเดอร์', esc(m.cat.folder) + ' / ' + m.date.slice(0, 4) + ' / ' + m.date.slice(0, 7)], ['จำนวนเงิน', money(e.amount) + ' บาท'], ['เบิกคืน', esc(e.reimb)]].map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
+    $('doneSumm').innerHTML = [['ไฟล์', '<span class="mono" style="font-size:12px">' + esc(e.pdfName) + '</span>'], ['โฟลเดอร์', m.date.slice(0, 4) + ' / ' + m.date.slice(5, 7) + ' / ' + esc(m.cat.folder)], ['จำนวนเงิน', money(e.amount) + ' บาท'], ['เบิกคืน', esc(e.reimb)]].map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
     $('donePdf').href = e.pdf || '#'; $('donePdf').hidden = !e.pdf;
     goStep('done'); toast('บันทึก ' + e.id + ' แล้ว', 'ok');
   } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'err'); }
