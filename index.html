@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="styles.css?v=2.1.0">
+<link rel="stylesheet" href="styles.css?v=2.3.0">
 </head>
 <body>
 <header>
@@ -104,12 +104,28 @@
         <div class="att"><button type="button" data-cam="receipt"><b>📷</b><span>ถ่ายใบเสร็จ</span></button><button type="button" data-file="receipt"><b>📁</b><span>เลือกไฟล์ (รูป / PDF)</span></button></div>
         <div class="thumbs" id="th-receipt"></div>
       </div>
-      <div class="card">
-        <h2>2 · สลิป / หลักฐานการจ่าย ที่เห็นยอดเป็นบาท</h2>
-        <p class="hint" style="margin:0 0 10px">สลิปธนาคาร พร้อมเพย์ รายการเดินบัญชี หรือยอดตัดบัตร — ต้องเห็นตัวเลข ฿ ชัดเจน</p>
+      <div class="card ai-card">
+        <h2>2 · สลิปโอนเงินออกจากบริษัท <span class="ai-badge">AI VISION</span></h2>
+        <div class="ai-note"><span class="ic">👁️</span><div><b>แนบสลิปที่ TESR โอนเงินออก</b> (สลิปธนาคาร / พร้อมเพย์ / ยอดตัดบัตรบริษัท / รายการเดินบัญชี ต้องเห็นตัวเลข ฿ ชัดเจน) — AI จะอ่าน <b>ผู้โอน · ผู้รับเงิน · จำนวนเงิน · วันที่-เวลาโอน · Transaction ID · ธนาคารปลายทาง · บันทึกช่วยจำ</b> แล้วบันทึกลงชีตให้อัตโนมัติ<br><span class="muted">สลิปที่พนักงานโอนเงินส่วนตัวไปก่อน ให้แนบที่ข้อ 4 "หลักฐานอื่น"</span></div></div>
         <div class="att"><button type="button" data-cam="pay"><b>📷</b><span>ถ่ายสลิป</span></button><button type="button" data-file="pay"><b>📁</b><span>เลือกไฟล์อัปโหลด</span></button></div>
         <div class="thumbs" id="th-pay"></div>
         <div class="aistat" id="aiStat"></div><div id="aiBanner"></div>
+        <div id="slipHostA"></div>
+        <div id="slipData" class="slipdata hidden">
+          <div class="slipdata-h"><b>ข้อมูลที่ AI อ่านจากสลิป</b><span>ตรวจ/แก้ให้ตรงสลิป — บันทึกลงชีตของเดือนและทะเบียน "โอนเงินออก"</span></div>
+          <div class="slipgrid">
+            <div><label class="lbl" for="slipType">ประเภทเอกสาร</label><input class="field" id="slipType" list="slipTypes" placeholder="เช่น สลิปโอนเงิน (บัญชีบริษัท)" autocomplete="off"><datalist id="slipTypes"><option value="สลิปโอนเงิน (บัญชีบริษัท)"><option value="สลิปพร้อมเพย์"><option value="ยอดตัดบัตรบริษัท"><option value="รายการเดินบัญชี"><option value="e-Wallet"><option value="สลิปพนักงานโอนไปก่อน"></datalist></div>
+            <div><label class="lbl" for="slipPayer">ชื่อผู้โอน</label><input class="field" id="slipPayer" placeholder="เช่น บจก. ไทยเอ็มเบดเด็ดฯ / TESR"></div>
+            <div><label class="lbl" for="slipPayee">ชื่อผู้รับเงิน</label><input class="field" id="slipPayee" placeholder="ชื่อบัญชีปลายทาง"></div>
+            <div><label class="lbl" for="slipAmount">จำนวนเงิน (บาท)</label><input class="field" id="slipAmount" type="text" inputmode="decimal" placeholder="0.00"></div>
+            <div><label class="lbl" for="slipDate">วันที่โอนเงิน</label><input class="field" id="slipDate" type="date"></div>
+            <div><label class="lbl" for="slipTime">เวลาโอนเงิน</label><input class="field" id="slipTime" placeholder="HH:MM" inputmode="numeric"></div>
+            <div><label class="lbl" for="slipRef">Transaction ID / เลขอ้างอิง</label><input class="field" id="slipRef" placeholder="เลขอ้างอิงบนสลิป"></div>
+            <div><label class="lbl" for="slipBank">โอนเข้าธนาคาร</label><input class="field" id="slipBank" placeholder="เช่น KBank, SCB, พร้อมเพย์"></div>
+            <div class="span2"><label class="lbl" for="slipMemo">บันทึกช่วยจำ (ข้อความบนสลิป)</label><input class="field" id="slipMemo" placeholder="(ถ้ามี)"></div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm mt8" id="btnSlipManual">✎ กรอกข้อมูลสลิปเอง</button>
       </div>
       <div class="card">
         <h2>3 · หลักฐานตอนโอนเป็นสกุลต่างประเทศ (USD / RMB) — ถ้ามี</h2>
@@ -118,7 +134,13 @@
         <div class="thumbs" id="th-fx"></div>
       </div>
       <div class="card">
-        <h2>4 · ข้อมูล</h2>
+        <h2>4 · หลักฐานอื่น (ถ้ามี)</h2>
+        <p class="hint" style="margin:0 0 10px">ภาพรายการสินค้า / หน้าคำสั่งซื้อจากเว็บ (Taobao, Shopee, Lazada) · สลิปที่พนักงานโอนเงินส่วนตัวไปก่อน · ใบเสนอราคา ใบส่งของ ฯลฯ</p>
+        <div class="att"><button type="button" data-cam="other"><b>📷</b><span>ถ่ายรูป</span></button><button type="button" data-file="other"><b>📁</b><span>เลือกไฟล์ (รูป / PDF)</span></button></div>
+        <div class="thumbs" id="th-other"></div>
+      </div>
+      <div class="card">
+        <h2>5 · ข้อมูล</h2>
         <div class="row">
           <div><label class="lbl req" for="amount">จำนวนเงิน (บาท)</label><input class="field" id="amount" type="text" inputmode="decimal" placeholder="0.00"></div>
           <div><label class="lbl req" for="date">วันที่จ่าย</label><input class="field" id="date" type="date"></div>
@@ -149,12 +171,14 @@
         <button class="add" type="button" id="btnAddItem">+ เพิ่มรายการ</button>
         <div class="total"><span>รวมจำนวนเงิน</span><b id="itemsTotal">฿0.00</b></div>
       </div>
-      <div class="card">
-        <h2>3 · สลิป / หลักฐานการจ่าย ที่เห็นยอดเป็นบาท</h2>
-        <p class="hint" style="margin:0 0 10px">สลิปธนาคาร พร้อมเพย์ รายการเดินบัญชี หรือยอดตัดบัตร — ต้องเห็นตัวเลข ฿ ชัดเจน</p>
+      <div class="card ai-card">
+        <h2>3 · สลิปโอนเงินออกจากบริษัท <span class="ai-badge">AI VISION</span></h2>
+        <div class="ai-note"><span class="ic">👁️</span><div><b>แนบสลิปที่ TESR โอนเงินออก</b> (สลิปธนาคาร / พร้อมเพย์ / ยอดตัดบัตรบริษัท / รายการเดินบัญชี ต้องเห็นตัวเลข ฿ ชัดเจน) — AI จะอ่าน <b>ผู้โอน · ผู้รับเงิน · จำนวนเงิน · วันที่-เวลาโอน · Transaction ID · ธนาคารปลายทาง · บันทึกช่วยจำ</b> แล้วบันทึกลงชีตให้อัตโนมัติ<br><span class="muted">สลิปที่พนักงานโอนเงินส่วนตัวไปก่อน ให้แนบที่ข้อ 5 "หลักฐานอื่น"</span></div></div>
         <div class="att"><button type="button" data-cam="pay"><b>📷</b><span>ถ่ายสลิป</span></button><button type="button" data-file="pay"><b>📁</b><span>เลือกไฟล์อัปโหลด</span></button></div>
         <div class="thumbs" id="th-pay-b"></div>
         <div class="aistat" id="aiStatB"></div><div id="aiBannerB"></div>
+        <div id="slipHostB"></div>
+        <button type="button" class="btn btn-ghost btn-sm mt8" id="btnSlipManualB">✎ กรอกข้อมูลสลิปเอง</button>
       </div>
       <div class="card">
         <h2>4 · หลักฐานตอนโอนเป็นสกุลต่างประเทศ (USD / RMB) — ถ้ามี</h2>
@@ -163,9 +187,10 @@
         <div class="thumbs" id="th-fx-b"></div>
       </div>
       <div class="card">
-        <h2>5 · รูปสินค้า / หลักฐานอื่น (ถ้ามี)</h2>
+        <h2>5 · หลักฐานอื่น (ถ้ามี)</h2>
+        <p class="hint" style="margin:0 0 10px">ภาพรายการสินค้า / หน้าคำสั่งซื้อจากเว็บ (Taobao, Shopee, Lazada) · สลิปที่พนักงานโอนเงินส่วนตัวไปก่อน · ใบเสนอราคา ใบส่งของ ฯลฯ</p>
         <div class="att"><button type="button" data-cam="other"><b>📷</b><span>ถ่ายรูป</span></button><button type="button" data-file="other"><b>📁</b><span>เลือกไฟล์ (รูป / PDF)</span></button></div>
-        <div class="thumbs" id="th-other"></div>
+        <div class="thumbs" id="th-other-b"></div>
       </div>
       <div class="card">
         <h2>6 · จ่ายด้วย</h2>
@@ -259,11 +284,11 @@
 
 <!-- off-screen render zone for the A4 cover sheet -->
 <div id="renderZone"><div class="a4" id="coverRender"></div></div>
-<script src="config.js?v=2.1.0"></script>
-<script src="logo.js?v=2.1.0"></script>
-<script src="app-core.js?v=2.1.0"></script>
-<script src="app-form.js?v=2.1.0"></script>
-<script src="app-pdf.js?v=2.1.0"></script>
-<script src="app-main.js?v=2.1.0"></script>
+<script src="config.js?v=2.3.0"></script>
+<script src="logo.js?v=2.3.0"></script>
+<script src="app-core.js?v=2.3.0"></script>
+<script src="app-form.js?v=2.3.0"></script>
+<script src="app-pdf.js?v=2.3.0"></script>
+<script src="app-main.js?v=2.3.0"></script>
 </body>
 </html>
