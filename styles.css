@@ -250,7 +250,7 @@ input[type=date].field{color-scheme:dark}
 .a4 th{background:#D9D9D9;font-weight:700;text-align:center}
 .a4 td.n{width:64px;text-align:right;color:#000}
 .a4 td.amt{width:150px;text-align:right;font-variant-numeric:tabular-nums}
-.a4 tr.cat td{font-weight:700}
+.a4 tr.catrow td{font-weight:700}   /* ห้ามใช้ชื่อ .cat — ชนกับกริดหมวดหมู่ของแอป */
 .a4 tr.tot td{background:#D9D9D9;font-weight:700;height:30px}
 .a4 table.sigt{margin-top:40px;font-size:13.5px}
 .a4 table.sigt td{border:0;padding:4px 6px;vertical-align:bottom;height:auto;white-space:nowrap}
