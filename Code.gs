@@ -1,5 +1,5 @@
 /* ============================================================================
-   TESR Ledger — Backend (Google Apps Script)   v2.3.0 · กันยายน 2026
+   TESR Ledger — Backend (Google Apps Script)   v2.3.1 · กันยายน 2026
    ----------------------------------------------------------------------------
    หน้าที่ (หลังบ้านของ index.html)
    · รับเอกสาร PDF ที่แอปรวมให้แล้ว (ใบปะหน้า + ใบเสร็จ + สลิป) → เก็บลง Google Drive
@@ -25,8 +25,12 @@
    ชีต "ตั้งค่า": GOOGLE_CLIENT_ID (OAuth Client ID เดียวกับใน index.html) และ ALLOWED_EMAILS
 ============================================================================ */
 
-const APP = { name: 'TESR Ledger', version: '2.3.0' };
+const APP = { name: 'TESR Ledger', version: '2.3.1' };
 const TZ = 'Asia/Bangkok';
+// โฟลเดอร์หลักใน Google Drive ที่เก็บ PDF ทั้งหมด (โครงสร้างใต้โฟลเดอร์นี้ = ปี / เดือน / หมวดหมู่ / ไฟล์)
+// ค่านี้คือโฟลเดอร์ "ทดสอบระบบ 2026" — บัญชีที่ Deploy Apps Script ต้องมีสิทธิ์แก้ไขโฟลเดอร์นี้ · เว้นว่างถ้าจะให้ setup สร้างโฟลเดอร์ใหม่เอง
+const ROOT_FOLDER_ID = '1DKx1bDgjIlgbhXJ328N1dX8n91ibY5YM';
+const AUTO_FOLDER_NAME = 'TESR Ledger — หลักฐานรายจ่าย';
 const SHEET = { SET: 'ตั้งค่า', DASH: 'Dashboard', REG: 'โอนเงินออก', TPL: 'แม่แบบ', LEGACY: 'รายจ่าย' };   // ชีตรายเดือนชื่อ ปี-เดือน เช่น 2026-09
 
 // คอลัมน์ของชีตรายเดือน (A → AF) — ห้ามสลับ Dashboard/ทะเบียนอ้างอิงตามตัวอักษรคอลัมน์
@@ -52,7 +56,7 @@ const DEFAULT_SETTINGS = [
   ['COMPANY_NAME', 'บริษัท ไทยเอ็มเบดเด็ดซิสเต็มแอนด์โรโบติกส์ จำกัด', 'ชื่อบริษัท (แสดงในแอปและอีเมล)'],
   ['COMPANY_TAX_ID', '0125563024218', 'เลขผู้เสียภาษีบริษัท'],
   ['APPROVER_NAME', 'อานนท์ หม้อสุวรรณ', 'ชื่อผู้อนุมัติที่บันทึกในชีต (ลายเซ็นและชื่อบนใบปะหน้าใช้จาก staff.csv บทบาท approver)'],
-  ['RECEIPT_FOLDER_ID', '', 'โฟลเดอร์ Google Drive หลัก (setup สร้างให้ · ใส่ ID โฟลเดอร์แชร์ของบริษัทแทนได้)'],
+  ['RECEIPT_FOLDER_ID', ROOT_FOLDER_ID, 'ID โฟลเดอร์ Google Drive หลัก (ค่าเริ่มต้นจาก ROOT_FOLDER_ID ในโค้ด · เปลี่ยนเป็นโฟลเดอร์อื่นได้ที่นี่)'],
   ['RECEIPT_SHARE', 'private', 'private = เฉพาะคนที่ได้รับแชร์โฟลเดอร์ · link = ทุกคนที่มีลิงก์เปิดดูได้'],
   ['DRIVE_LAYOUT', 'month', 'โครงสร้างโฟลเดอร์: month = ปี/เดือน/หมวดหมู่ · day = ปี/เดือน/วัน/หมวดหมู่'],
   ['RECENT_LIMIT', 200, 'จำนวนรายการล่าสุดที่แอปโหลด'],
@@ -278,11 +282,24 @@ function readRows_(sheet) {
 
 // ============================================================ Drive
 function receiptRoot_(s) {
-  const fid = str_(s.RECEIPT_FOLDER_ID);
-  if (fid) { try { return DriveApp.getFolderById(fid); } catch (e) { /* สร้างใหม่ */ } }
-  const folder = DriveApp.createFolder('TESR Ledger — หลักฐานรายจ่าย');
+  const fid = str_(s.RECEIPT_FOLDER_ID) || ROOT_FOLDER_ID;
+  if (fid) {
+    try { return DriveApp.getFolderById(fid); }
+    catch (e) { if (fid === ROOT_FOLDER_ID) throw new Error('เปิดโฟลเดอร์หลัก (ROOT_FOLDER_ID) ไม่ได้ — แชร์โฟลเดอร์ให้บัญชีที่ Deploy Apps Script เป็นผู้แก้ไข'); /* ค่าในชีตใช้ไม่ได้ → สร้างใหม่ */ }
+  }
+  const folder = DriveApp.createFolder(AUTO_FOLDER_NAME);
   setSetting_('RECEIPT_FOLDER_ID', folder.getId());
   return folder;
+}
+/** ตอน setup: ถ้าชีตตั้งค่ายังชี้โฟลเดอร์ที่ระบบสร้างเอง (หรือว่าง) ให้เปลี่ยนไปใช้ ROOT_FOLDER_ID ในโค้ด — ค่าที่ผู้ดูแลตั้งเองไว้จะไม่ถูกทับ */
+function applyRootFolder_() {
+  if (!ROOT_FOLDER_ID) return;
+  const cur = str_(settings_().RECEIPT_FOLDER_ID);
+  if (cur === ROOT_FOLDER_ID) return;
+  let auto = !cur;
+  if (cur) { try { auto = DriveApp.getFolderById(cur).getName() === AUTO_FOLDER_NAME; } catch (e) { auto = true; } }
+  if (auto) setSetting_('RECEIPT_FOLDER_ID', ROOT_FOLDER_ID);
+  DriveApp.getFolderById(ROOT_FOLDER_ID);   // ตรวจสิทธิ์ — ถ้าเข้าไม่ได้จะ error ให้เห็นตอน setup เลย
 }
 function entryFolder_(s, category, dateStr) {
   let f = childFolder_(receiptRoot_(s), dateStr.slice(0, 4));                          // ปี  เช่น 2026
@@ -459,6 +476,7 @@ function setup() {
   monthSheets_().forEach(ensureColumns_);                     // ชีตเดือนจากเวอร์ชันก่อน → เพิ่มคอลัมน์ W–AF
   migrateLegacy_();
   monthSheet_(fmtDate_(new Date(), 'yyyy-MM'), true);
+  applyRootFolder_();
   receiptRoot_(settings_());
   const first = ss.getSheets().find(sh => (sh.getName() === 'Sheet1' || sh.getName() === 'ชีต1') && sh.getLastRow() === 0);
   if (first) ss.deleteSheet(first);
