@@ -1,5 +1,5 @@
 /* ============================================================================
-   TESR Ledger — Backend (Google Apps Script)   v2.3.1 · กันยายน 2026
+   TESR Ledger — Backend (Google Apps Script)   v2.3.2 · กันยายน 2026
    ----------------------------------------------------------------------------
    หน้าที่ (หลังบ้านของ index.html)
    · รับเอกสาร PDF ที่แอปรวมให้แล้ว (ใบปะหน้า + ใบเสร็จ + สลิป) → เก็บลง Google Drive
@@ -25,10 +25,10 @@
    ชีต "ตั้งค่า": GOOGLE_CLIENT_ID (OAuth Client ID เดียวกับใน index.html) และ ALLOWED_EMAILS
 ============================================================================ */
 
-const APP = { name: 'TESR Ledger', version: '2.3.1' };
+const APP = { name: 'TESR Ledger', version: '2.3.2' };
 const TZ = 'Asia/Bangkok';
 // โฟลเดอร์หลักใน Google Drive ที่เก็บ PDF ทั้งหมด (โครงสร้างใต้โฟลเดอร์นี้ = ปี / เดือน / หมวดหมู่ / ไฟล์)
-// ค่านี้คือโฟลเดอร์ "ทดสอบระบบ 2026" — บัญชีที่ Deploy Apps Script ต้องมีสิทธิ์แก้ไขโฟลเดอร์นี้ · เว้นว่างถ้าจะให้ setup สร้างโฟลเดอร์ใหม่เอง
+// ค่านี้คือโฟลเดอร์ "ทดสอบระบบ 2026" — ถ้าตั้งไว้ ค่านี้ชนะค่าในชีตตั้งค่าเสมอ · บัญชีที่ Deploy Apps Script ต้องมีสิทธิ์แก้ไขโฟลเดอร์นี้ · เว้นว่างถ้าจะใช้ค่าในชีตตั้งค่า/ให้ setup สร้างโฟลเดอร์ใหม่เอง
 const ROOT_FOLDER_ID = '1DKx1bDgjIlgbhXJ328N1dX8n91ibY5YM';
 const AUTO_FOLDER_NAME = 'TESR Ledger — หลักฐานรายจ่าย';
 const SHEET = { SET: 'ตั้งค่า', DASH: 'Dashboard', REG: 'โอนเงินออก', TPL: 'แม่แบบ', LEGACY: 'รายจ่าย' };   // ชีตรายเดือนชื่อ ปี-เดือน เช่น 2026-09
@@ -56,7 +56,7 @@ const DEFAULT_SETTINGS = [
   ['COMPANY_NAME', 'บริษัท ไทยเอ็มเบดเด็ดซิสเต็มแอนด์โรโบติกส์ จำกัด', 'ชื่อบริษัท (แสดงในแอปและอีเมล)'],
   ['COMPANY_TAX_ID', '0125563024218', 'เลขผู้เสียภาษีบริษัท'],
   ['APPROVER_NAME', 'อานนท์ หม้อสุวรรณ', 'ชื่อผู้อนุมัติที่บันทึกในชีต (ลายเซ็นและชื่อบนใบปะหน้าใช้จาก staff.csv บทบาท approver)'],
-  ['RECEIPT_FOLDER_ID', ROOT_FOLDER_ID, 'ID โฟลเดอร์ Google Drive หลัก (ค่าเริ่มต้นจาก ROOT_FOLDER_ID ในโค้ด · เปลี่ยนเป็นโฟลเดอร์อื่นได้ที่นี่)'],
+  ['RECEIPT_FOLDER_ID', ROOT_FOLDER_ID, 'ID โฟลเดอร์ Google Drive หลัก — ถูกกำหนดจาก ROOT_FOLDER_ID ใน Code.gs (แก้ที่โค้ด ค่าในชีตนี้ใช้เมื่อโค้ดเว้นว่างเท่านั้น)'],
   ['RECEIPT_SHARE', 'private', 'private = เฉพาะคนที่ได้รับแชร์โฟลเดอร์ · link = ทุกคนที่มีลิงก์เปิดดูได้'],
   ['DRIVE_LAYOUT', 'month', 'โครงสร้างโฟลเดอร์: month = ปี/เดือน/หมวดหมู่ · day = ปี/เดือน/วัน/หมวดหมู่'],
   ['RECENT_LIMIT', 200, 'จำนวนรายการล่าสุดที่แอปโหลด'],
@@ -80,7 +80,7 @@ function doPost(e) {
 function handle_(req) {
   try {
     const action = str_(req.action) || 'ping';
-    if (action === 'ping') return json_({ ok: true, app: APP.name, version: APP.version, time: now_() });
+    if (action === 'ping') return json_({ ok: true, app: APP.name, version: APP.version, rootFolder: ROOT_FOLDER_ID, time: now_() });
     auth_(req.token);
     const login = verifyGoogle_(req.idToken);   // null = ไม่ได้เปิดใช้การล็อกอิน
     switch (action) {
@@ -282,7 +282,7 @@ function readRows_(sheet) {
 
 // ============================================================ Drive
 function receiptRoot_(s) {
-  const fid = str_(s.RECEIPT_FOLDER_ID) || ROOT_FOLDER_ID;
+  const fid = ROOT_FOLDER_ID || str_(s.RECEIPT_FOLDER_ID);          // โค้ดชนะชีต
   if (fid) {
     try { return DriveApp.getFolderById(fid); }
     catch (e) { if (fid === ROOT_FOLDER_ID) throw new Error('เปิดโฟลเดอร์หลัก (ROOT_FOLDER_ID) ไม่ได้ — แชร์โฟลเดอร์ให้บัญชีที่ Deploy Apps Script เป็นผู้แก้ไข'); /* ค่าในชีตใช้ไม่ได้ → สร้างใหม่ */ }
@@ -291,15 +291,12 @@ function receiptRoot_(s) {
   setSetting_('RECEIPT_FOLDER_ID', folder.getId());
   return folder;
 }
-/** ตอน setup: ถ้าชีตตั้งค่ายังชี้โฟลเดอร์ที่ระบบสร้างเอง (หรือว่าง) ให้เปลี่ยนไปใช้ ROOT_FOLDER_ID ในโค้ด — ค่าที่ผู้ดูแลตั้งเองไว้จะไม่ถูกทับ */
+/** ตอน setup: เขียน ROOT_FOLDER_ID ลงชีตตั้งค่าให้ตรงกับโค้ด และตรวจสิทธิ์เข้าโฟลเดอร์ (ถ้าเข้าไม่ได้จะ error ให้เห็นตอน setup เลย) */
 function applyRootFolder_() {
   if (!ROOT_FOLDER_ID) return;
-  const cur = str_(settings_().RECEIPT_FOLDER_ID);
-  if (cur === ROOT_FOLDER_ID) return;
-  let auto = !cur;
-  if (cur) { try { auto = DriveApp.getFolderById(cur).getName() === AUTO_FOLDER_NAME; } catch (e) { auto = true; } }
-  if (auto) setSetting_('RECEIPT_FOLDER_ID', ROOT_FOLDER_ID);
-  DriveApp.getFolderById(ROOT_FOLDER_ID);   // ตรวจสิทธิ์ — ถ้าเข้าไม่ได้จะ error ให้เห็นตอน setup เลย
+  const f = DriveApp.getFolderById(ROOT_FOLDER_ID);
+  if (str_(settings_().RECEIPT_FOLDER_ID) !== ROOT_FOLDER_ID) setSetting_('RECEIPT_FOLDER_ID', ROOT_FOLDER_ID);
+  SpreadsheetApp.getActive().toast('โฟลเดอร์หลักใน Drive: ' + f.getName(), APP.name, 6);
 }
 function entryFolder_(s, category, dateStr) {
   let f = childFolder_(receiptRoot_(s), dateStr.slice(0, 4));                          // ปี  เช่น 2026
