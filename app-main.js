@@ -4,12 +4,11 @@ function renderList() {
   const me = state.who ? state.who.nick : '';
   const s = state.summary || {};
   const mine = state.recent.filter(e => e.by === me);
-  const pendingReimbMine = mine.filter(e => e.reimb === 'รอจ่ายคืน').reduce((a, e) => a + e.amount, 0);
   $('listSub').textContent = (s.period ? 'งวด ' + s.period + ' · ' : '') + 'รวม ' + money(s.total || 0) + ' บาท · ' + (s.count || 0) + ' รายการ';
-  $('kpis').innerHTML = [['รอบัญชีตรวจ', String(s.pendingReview || 0)], ['ไม่มีใบเสร็จ (งวดนี้)', money(s.noReceipt || 0)], ['รอจ่ายคืน' + (me ? ' ' + me : ''), money(pendingReimbMine)], ['ตีกลับ', String(s.returned || 0)]].map(k => '<div><b>' + k[1] + '</b><small>' + k[0] + '</small></div>').join('');
+  $('kpis').innerHTML = [['รอบัญชีตรวจ', String(s.pendingReview || 0)], ['ไม่มีใบเสร็จ (งวดนี้)', money(s.noReceipt || 0)], ['รวมงวดนี้', money(s.total || 0)], ['ตีกลับ', String(s.returned || 0)]].map(k => '<div><b>' + k[1] + '</b><small>' + k[0] + '</small></div>').join('');
   const f = state.listFilter;
-  const list = state.recent.filter(e => f === 'mine' ? e.by === me : f === 'pending' ? e.status === 'รอตรวจ' : f === 'reimb' ? e.reimb === 'รอจ่ายคืน' : true);
-  $('listBody').innerHTML = list.length ? list.map(e => '<div class="item"><div class="a"><span><span class="mono gold">' + esc(e.id) + '</span> · ' + esc(e.cat) + '</span><b>' + money(e.amount) + '</b></div><div class="m">' + thDateLong(e.date) + ' · ' + esc(e.by) + (e.vendor ? ' · ' + esc(e.vendor) : '') + (e.desc ? '<br>' + esc(e.desc) : '') + '</div><div class="m">' + statusTag(e) + (e.hasReceipt ? '' : '<span class="tag">ใบปะหน้า</span>') + (e.reimb === 'รอจ่ายคืน' ? '<span class="tag warn">รอจ่ายคืน</span>' : '') + (e.pdf ? ' <a href="' + esc(e.pdf) + '" target="_blank" rel="noopener">เปิด PDF</a>' : '') + (e.accNote ? '<br><span class="err-t">บัญชี: ' + esc(e.accNote) + '</span>' : '') + '</div></div>').join('') : '<p class="hint">ไม่มีรายการ</p>';
+  const list = state.recent.filter(e => f === 'mine' ? e.by === me : f === 'pending' ? e.status === 'รอตรวจ' : true);
+  $('listBody').innerHTML = list.length ? list.map(e => '<div class="item"><div class="a"><span><span class="mono gold">' + esc(e.id) + '</span> · ' + esc(e.cat) + '</span><b>' + money(e.amount) + '</b></div><div class="m">' + thDateLong(e.date) + ' · ' + esc(e.by) + (e.vendor ? ' · ' + esc(e.vendor) : '') + (e.desc ? '<br>' + esc(e.desc) : '') + '</div><div class="m">' + statusTag(e) + (e.hasReceipt ? '' : '<span class="tag">ใบปะหน้า</span>') + (e.pay === 'บริษัท' ? '' : '<span class="tag">พนักงานจ่ายไปก่อน</span>') + (e.pdf ? ' <a href="' + esc(e.pdf) + '" target="_blank" rel="noopener">เปิด PDF</a>' : '') + (e.accNote ? '<br><span class="err-t">บัญชี: ' + esc(e.accNote) + '</span>' : '') + '</div></div>').join('') : '<p class="hint">ไม่มีรายการ</p>';
   $('btnSheet').hidden = !state.cfg.sheetUrl; if (state.cfg.sheetUrl) $('btnSheet').href = state.cfg.sheetUrl;
 }
 function statusTag(e) { const k = e.status === 'ตีกลับ' ? 'err' : e.status === 'บันทึกบัญชีแล้ว' || e.status === 'ตรวจแล้ว' ? 'ok' : 'warn'; return '<span class="tag ' + k + '">' + esc(e.status || 'รอตรวจ') + '</span>'; }
@@ -98,4 +97,3 @@ async function init() {
   await refresh(cached);
 }
 document.addEventListener('DOMContentLoaded', init);
-
