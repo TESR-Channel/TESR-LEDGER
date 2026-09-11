@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="styles.css?v=2.3.0">
+<link rel="stylesheet" href="styles.css?v=2.4.0">
 </head>
 <body>
 <header>
@@ -147,7 +147,7 @@
         </div>
         <div class="mt"><label class="lbl" for="vendor">ร้าน / ผู้รับเงิน / แพลตฟอร์ม</label><input class="field" id="vendor" placeholder="เช่น Kerry Express, Shopee ร้าน ABC, Taobao" autocomplete="off"></div>
         <div class="mt"><label class="lbl" for="desc">ซื้ออะไร / ใช้กับอะไร</label><input class="field" id="desc" placeholder="เช่น สายไฟ 20 เมตร ใช้ในงาน Iron-X"></div>
-        <div class="mt"><label class="lbl req">จ่ายด้วย</label><div class="chips" id="payChips"><button class="chip" type="button" data-p="บริษัท">เงิน/บัตรบริษัท</button><button class="chip" type="button" data-p="ส่วนตัว (ขอเบิกคืน)">เงินส่วนตัว — ขอเบิกคืน</button></div></div>
+        <div class="mt"><label class="lbl req">จ่ายด้วย</label><div class="chips" id="payChips"><button class="chip" type="button" data-p="บริษัท">เงิน/บัตรบริษัท</button><button class="chip" type="button" data-p="ส่วนตัว (ขอเบิกคืน)">เงินส่วนตัว (พนักงานจ่ายไปก่อน)</button></div></div>
         <div class="mt"><label class="lbl" for="note">หมายเหตุถึงบัญชี</label><input class="field" id="note" placeholder="(ถ้ามี)"></div>
       </div>
     </div>
@@ -194,7 +194,7 @@
       </div>
       <div class="card">
         <h2>6 · จ่ายด้วย</h2>
-        <div class="chips" id="payChipsB"><button class="chip" type="button" data-p="ส่วนตัว (ขอเบิกคืน)">เงินส่วนตัว — ขอเบิกคืน</button><button class="chip" type="button" data-p="บริษัท">เงิน/บัตรบริษัท</button></div>
+        <div class="chips" id="payChipsB"><button class="chip" type="button" data-p="ส่วนตัว (ขอเบิกคืน)">เงินส่วนตัว (พนักงานจ่ายไปก่อน)</button><button class="chip" type="button" data-p="บริษัท">เงิน/บัตรบริษัท</button></div>
         <div class="mt"><label class="lbl" for="bnote">หมายเหตุถึงบัญชี</label><input class="field" id="bnote" placeholder="(ถ้ามี)"></div>
       </div>
     </div>
@@ -239,7 +239,6 @@
     <button class="chip on" type="button" data-f="mine">ของฉัน</button>
     <button class="chip" type="button" data-f="all">ทั้งหมด</button>
     <button class="chip" type="button" data-f="pending">รอตรวจ</button>
-    <button class="chip" type="button" data-f="reimb">รอจ่ายคืน</button>
   </div>
   <div class="mt" id="listBody"></div>
   <div class="btnrow"><a class="btn btn-ghost btn-sm" id="btnSheet" href="#" target="_blank" rel="noopener" hidden>เปิด Google Sheet</a><button class="btn btn-ghost btn-sm" type="button" id="btnRefresh">โหลดใหม่</button></div>
@@ -284,11 +283,11 @@
 
 <!-- off-screen render zone for the A4 cover sheet -->
 <div id="renderZone"><div class="a4" id="coverRender"></div></div>
-<script src="config.js?v=2.3.0"></script>
-<script src="logo.js?v=2.3.0"></script>
-<script src="app-core.js?v=2.3.0"></script>
-<script src="app-form.js?v=2.3.0"></script>
-<script src="app-pdf.js?v=2.3.0"></script>
-<script src="app-main.js?v=2.3.0"></script>
+<script src="config.js?v=2.4.0"></script>
+<script src="logo.js?v=2.4.0"></script>
+<script src="app-core.js?v=2.4.0"></script>
+<script src="app-form.js?v=2.4.0"></script>
+<script src="app-pdf.js?v=2.4.0"></script>
+<script src="app-main.js?v=2.4.0"></script>
 </body>
 </html>
