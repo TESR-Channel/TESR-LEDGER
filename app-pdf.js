@@ -3,7 +3,7 @@ function coverHTML(m) {
   const who = m.who, ap = m.approver;
   const cb = (on, k, v) => '<div class="cb"><span class="box' + (on ? ' on' : '') + '"></span><span class="k">' + k + '</span><span class="v">' + esc(on ? v : '') + '</span></div>';
   const rows = [];
-  rows.push('<tr class="cat"><td class="n"></td><td>' + esc(m.cat.name) + '</td><td class="amt">' + money(m.amount) + '</td></tr>');
+  rows.push('<tr class="catrow"><td class="n"></td><td>' + esc(m.cat.name) + '</td><td class="amt">' + money(m.amount) + '</td></tr>');
   m.items.forEach((it, i) => rows.push('<tr><td class="n">' + (i + 1) + '</td><td>' + esc(it.desc) + '</td><td class="amt">' + (m.items.length > 1 ? money(it.amount) : '') + '</td></tr>'));
   for (let i = rows.length; i < 14; i++) rows.push('<tr><td class="n"></td><td></td><td class="amt"></td></tr>');
   const sig = src => src ? '<img src="' + src + '" alt="">' : '';
@@ -141,7 +141,7 @@ async function approve() {
     }, { timeout: 180000 });
     const e = res.entry; state.recent.unshift(e); lsDel(LS.boot);
     $('doneId').textContent = e.id; $('doneSub').textContent = 'เก็บใน Drive · บันทึกลงชีต ' + (e.sheet || e.period || m.date.slice(0, 7)) + ' · สถานะ "รอตรวจ"';
-    $('doneSumm').innerHTML = [['ไฟล์', '<span class="mono" style="font-size:12px">' + esc(e.pdfName) + '</span>'], ['โฟลเดอร์', m.date.slice(0, 4) + ' / ' + m.date.slice(5, 7) + ' / ' + esc(m.cat.folder)], ['จำนวนเงิน', money(e.amount) + ' บาท'], ['เบิกคืน', esc(e.reimb)]].map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
+    $('doneSumm').innerHTML = [['ไฟล์', '<span class="mono" style="font-size:12px">' + esc(e.pdfName) + '</span>'], ['โฟลเดอร์', m.date.slice(0, 4) + ' / ' + m.date.slice(5, 7) + ' / ' + esc(m.cat.folder)], ['จำนวนเงิน', money(e.amount) + ' บาท'], ['จ่ายด้วย', esc(e.pay)]].map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
     $('donePdf').href = e.pdf || '#'; $('donePdf').hidden = !e.pdf;
     goStep('done'); toast('บันทึก ' + e.id + ' แล้ว', 'ok');
   } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'err'); }
