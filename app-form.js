@@ -174,3 +174,46 @@ function model() {
   };
 }
 
+/* ---------- ลากไฟล์มาวาง (drag & drop) และวางจากคลิปบอร์ด (paste) ---------- */
+function attGroup(att) { const b = att.querySelector('[data-cam],[data-file]'); return b ? (b.dataset.cam || b.dataset.file) : ''; }
+function groupLabel(g) { return { receipt: 'ใบเสร็จ', pay: 'สลิปโอนเงินออก (AI VISION)', fx: 'หลักฐานสกุลต่างประเทศ', other: 'หลักฐานอื่น' }[g] || g; }
+function hasFiles(e) { const dt = e.dataTransfer; return !!(dt && dt.types && Array.from(dt.types).includes('Files')); }
+let pasteTarget = 'pay';   // การ์ดล่าสุดที่ผู้ใช้แตะ/ชี้ = ปลายทางของ Ctrl+V
+function clipFiles(list) { return Array.from(list || []).filter(f => /^image\//.test(f.type) || f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')); }
+async function pasteFromClipboard(group) {
+  if (!navigator.clipboard || !navigator.clipboard.read) { toast('เบราว์เซอร์นี้ไม่รองรับปุ่มวาง — คัดลอกรูปแล้วกด Ctrl+V / ⌘V ในหน้านี้แทน', 'err'); return; }
+  try {
+    const items = await navigator.clipboard.read(); const files = [];
+    for (const it of items) {
+      const type = it.types.find(t => t.startsWith('image/') || t === 'application/pdf');
+      if (type) { const blob = await it.getType(type); files.push(new File([blob], 'clipboard-' + Date.now() + (type === 'application/pdf' ? '.pdf' : '.png'), { type: type })); }
+    }
+    if (!files.length) { toast('ไม่มีรูปหรือ PDF ในคลิปบอร์ด — คัดลอกรูปก่อนแล้วกดอีกครั้ง', 'err'); return; }
+    await addFiles(group, files); toast('วาง ' + files.length + ' ไฟล์ที่ "' + groupLabel(group) + '"', 'ok');
+  } catch (e) { toast('อ่านคลิปบอร์ดไม่ได้ — ลองกด Ctrl+V / ⌘V แทน', 'err'); }
+}
+function initDropPaste() {
+  $$('.att').forEach(att => {
+    if (att.dataset.dnd) return; att.dataset.dnd = '1';
+    const g = attGroup(att); if (!g) return;
+    const card = att.closest('.card') || att;
+    card.addEventListener('dragenter', e => { if (hasFiles(e)) { e.preventDefault(); att.classList.add('drag'); } });
+    card.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; att.classList.add('drag'); } });
+    card.addEventListener('dragleave', e => { if (!card.contains(e.relatedTarget)) att.classList.remove('drag'); });
+    card.addEventListener('drop', e => { att.classList.remove('drag'); if (!hasFiles(e)) return; e.preventDefault(); const files = clipFiles(e.dataTransfer.files); if (!files.length) { toast('วางได้เฉพาะรูปหรือ PDF', 'err'); return; } pasteTarget = g; addFiles(g, files); toast('เพิ่ม ' + files.length + ' ไฟล์ที่ "' + groupLabel(g) + '"', 'ok'); });
+    card.addEventListener('pointerenter', () => { pasteTarget = g; });
+    card.addEventListener('pointerdown', () => { pasteTarget = g; });
+    const hint = document.createElement('div'); hint.className = 'drophint';
+    hint.innerHTML = '<span>ลากไฟล์มาวางในการ์ดนี้ได้ · คัดลอกรูปจากที่อื่นแล้วกด <b>Ctrl+V</b> / <b>⌘V</b> ก็ได้</span><button type="button" class="pastebtn">📋 วางจากคลิปบอร์ด</button>';
+    hint.querySelector('button').onclick = () => pasteFromClipboard(g);
+    att.insertAdjacentElement('afterend', hint);
+  });
+  ['dragover', 'drop'].forEach(ev => document.addEventListener(ev, e => { if (hasFiles(e)) e.preventDefault(); }));   // กันเบราว์เซอร์เปิดไฟล์แทนหน้าแอป
+  document.addEventListener('paste', e => {
+    if (state.step !== 4 || state.view !== 'wiz') return;
+    const files = clipFiles(e.clipboardData && e.clipboardData.files);
+    if (!files.length) return;                              // วางข้อความตามปกติ
+    e.preventDefault(); addFiles(pasteTarget, files); toast('วาง ' + files.length + ' ไฟล์ที่ "' + groupLabel(pasteTarget) + '"', 'ok');
+  });
+}
+document.addEventListener('DOMContentLoaded', initDropPaste);
