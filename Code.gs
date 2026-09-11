@@ -1,5 +1,5 @@
 /* ============================================================================
-   TESR Ledger — Backend (Google Apps Script)   v2.3.2 · กันยายน 2026
+   TESR Ledger — Backend (Google Apps Script)   v2.4.0 · กันยายน 2026
    ----------------------------------------------------------------------------
    หน้าที่ (หลังบ้านของ index.html)
    · รับเอกสาร PDF ที่แอปรวมให้แล้ว (ใบปะหน้า + ใบเสร็จ + สลิป) → เก็บลง Google Drive
@@ -8,7 +8,7 @@
      จากชีตแม่แบบเมื่อมีรายการแรกของเดือน) — เดือนละชีต ตรวจสอบง่าย ไม่ปนกัน · ลิงก์ PDF แสดงเป็นชื่อไฟล์
    · AI Vision (OpenAI) อ่านสลิปโอนเงินออกจากบริษัท → ประเภทเอกสาร ผู้โอน ผู้รับ ยอด วันที่ เวลา Transaction ID
      บันทึกช่วยจำ ธนาคารปลายทาง → เก็บในคอลัมน์ W–AF ของชีตเดือน และรวมเป็นทะเบียน "โอนเงินออก" (สูตร QUERY ข้ามทุกเดือน)
-   · Dashboard รายเดือน ตามหมวด ตามผู้บันทึก รอตรวจ รอจ่ายคืน · แจ้งเตือนอีเมล
+   · Dashboard รายเดือน ตามหมวด ตามผู้บันทึก รอตรวจ · แจ้งเตือนอีเมล
    · ตรวจการเข้าสู่ระบบด้วย Google: รับ ID token จากแอป → ตรวจกับ Google → อนุญาตเฉพาะอีเมลใน ALLOWED_EMAILS
 
    รายชื่อพนักงานและหมวดหมู่อยู่ในไฟล์ staff.csv / categories.csv บน GitHub (คู่กับ index.html)
@@ -25,7 +25,7 @@
    ชีต "ตั้งค่า": GOOGLE_CLIENT_ID (OAuth Client ID เดียวกับใน index.html) และ ALLOWED_EMAILS
 ============================================================================ */
 
-const APP = { name: 'TESR Ledger', version: '2.3.2' };
+const APP = { name: 'TESR Ledger', version: '2.4.0' };
 const TZ = 'Asia/Bangkok';
 // โฟลเดอร์หลักใน Google Drive ที่เก็บ PDF ทั้งหมด (โครงสร้างใต้โฟลเดอร์นี้ = ปี / เดือน / หมวดหมู่ / ไฟล์)
 // ค่านี้คือโฟลเดอร์ "ทดสอบระบบ 2026" — ถ้าตั้งไว้ ค่านี้ชนะค่าในชีตตั้งค่าเสมอ · บัญชีที่ Deploy Apps Script ต้องมีสิทธิ์แก้ไขโฟลเดอร์นี้ · เว้นว่างถ้าจะใช้ค่าในชีตตั้งค่า/ให้ setup สร้างโฟลเดอร์ใหม่เอง
@@ -33,23 +33,23 @@ const ROOT_FOLDER_ID = '1DKx1bDgjIlgbhXJ328N1dX8n91ibY5YM';
 const AUTO_FOLDER_NAME = 'TESR Ledger — หลักฐานรายจ่าย';
 const SHEET = { SET: 'ตั้งค่า', DASH: 'Dashboard', REG: 'โอนเงินออก', TPL: 'แม่แบบ', LEGACY: 'รายจ่าย' };   // ชีตรายเดือนชื่อ ปี-เดือน เช่น 2026-09
 
-// คอลัมน์ของชีตรายเดือน (A → AF) — ห้ามสลับ Dashboard/ทะเบียนอ้างอิงตามตัวอักษรคอลัมน์
+// คอลัมน์ของชีตรายเดือน (A → AE) — ห้ามสลับ Dashboard/ทะเบียนอ้างอิงตามตัวอักษรคอลัมน์ (v2.4 ตัดคอลัมน์ "สถานะเบิกคืน" ออก)
 const HEADERS = [
   'ID', 'บันทึกเมื่อ', 'วันที่จ่าย', 'งวด', 'ผู้บันทึก',                         // A-E
   'ชื่อ-นามสกุล', 'แผนก', 'ใบเสร็จ', 'หมวดหมู่', 'รายละเอียด',                 // F-J
-  'ร้าน/ผู้รับเงิน', 'จำนวนเงิน (บาท)', 'จ่ายโดย', 'สถานะเบิกคืน', 'เอกสาร PDF',   // K-O
-  'จำนวนหน้า', 'สถานะบัญชี', 'หมายเหตุผู้บันทึก', 'หมายเหตุบัญชี', 'ผู้อนุมัติ',    // P-T
-  'ประเภท/เหตุผล (ใบปะหน้า)', 'บัญชี Google ที่ล็อกอิน',                       // U-V
-  'ประเภทเอกสาร (สลิป)', 'ชื่อผู้โอน', 'ชื่อผู้รับเงิน (สลิป)', 'จำนวนเงินตามสลิป', 'วันที่โอนเงิน',   // W-AA  ← ข้อมูลจากสลิป (AI Vision)
-  'เวลาโอนเงิน', 'Transaction ID', 'บันทึกช่วยจำ (สลิป)', 'โอนเข้าธนาคาร', 'ลิงก์ PDF',           // AB-AF
+  'ร้าน/ผู้รับเงิน', 'จำนวนเงิน (บาท)', 'จ่ายโดย', 'เอกสาร PDF',                  // K-N
+  'จำนวนหน้า', 'สถานะบัญชี', 'หมายเหตุผู้บันทึก', 'หมายเหตุบัญชี', 'ผู้อนุมัติ',    // O-S
+  'ประเภท/เหตุผล (ใบปะหน้า)', 'บัญชี Google ที่ล็อกอิน',                       // T-U
+  'ประเภทเอกสาร (สลิป)', 'ชื่อผู้โอน', 'ชื่อผู้รับเงิน (สลิป)', 'จำนวนเงินตามสลิป', 'วันที่โอนเงิน',   // V-Z  ← ข้อมูลจากสลิป (AI Vision)
+  'เวลาโอนเงิน', 'Transaction ID', 'บันทึกช่วยจำ (สลิป)', 'โอนเข้าธนาคาร', 'ลิงก์ PDF',           // AA-AE
 ];
-const COL = { ID: 0, TS: 1, DATE: 2, PERIOD: 3, BY: 4, FULLNAME: 5, DEPT: 6, RECEIPT: 7, CAT: 8, DESC: 9, VENDOR: 10, AMOUNT: 11, PAY: 12, REIMB: 13, PDF: 14, PAGES: 15, STATUS: 16, NOTE: 17, ACCNOTE: 18, APPROVER: 19, COVER: 20, LOGIN: 21,
-  STYPE: 22, SPAYER: 23, SPAYEE: 24, SAMOUNT: 25, SDATE: 26, STIME: 27, SREF: 28, SMEMO: 29, SBANK: 30, URL: 31 };
+const LEGACY_REIMB_HEADER = 'สถานะเบิกคืน';   // คอลัมน์ N ของเวอร์ชันก่อน — setup จะลบออกจากชีตเดิมให้
+const COL = { ID: 0, TS: 1, DATE: 2, PERIOD: 3, BY: 4, FULLNAME: 5, DEPT: 6, RECEIPT: 7, CAT: 8, DESC: 9, VENDOR: 10, AMOUNT: 11, PAY: 12, PDF: 13, PAGES: 14, STATUS: 15, NOTE: 16, ACCNOTE: 17, APPROVER: 18, COVER: 19, LOGIN: 20,
+  STYPE: 21, SPAYER: 22, SPAYEE: 23, SAMOUNT: 24, SDATE: 25, STIME: 26, SREF: 27, SMEMO: 28, SBANK: 29, URL: 30 };
 const ROW_FORMATS = HEADERS.map((h, i) => i === COL.TS ? 'yyyy-mm-dd hh:mm' : i === COL.DATE ? 'yyyy-mm-dd' : i === COL.AMOUNT || i === COL.SAMOUNT ? '#,##0.00' : i === COL.PAGES ? '0' : '@');
 
 const RECEIPT = { YES: 'มีใบเสร็จ', NO: 'ไม่มีใบเสร็จ (ใบปะหน้า)' };
 const PAY = { COMPANY: 'บริษัท', PERSONAL: 'ส่วนตัว (ขอเบิกคืน)' };
-const REIMB = { NONE: 'ไม่ต้อง', PENDING: 'รอจ่ายคืน', PAID: 'จ่ายคืนแล้ว' };
 const STATUS = { NEW: 'รอตรวจ', CHECKED: 'ตรวจแล้ว', DONE: 'บันทึกบัญชีแล้ว', RETURNED: 'ตีกลับ' };
 
 const DEFAULT_SETTINGS = [
@@ -190,7 +190,6 @@ function submit_(req, login) {
     row[COL.VENDOR] = vendor;
     row[COL.AMOUNT] = amount;
     row[COL.PAY] = pay;
-    row[COL.REIMB] = pay === PAY.PERSONAL ? REIMB.PENDING : REIMB.NONE;
     row[COL.PAGES] = num_(req.pages) || '';
     row[COL.STATUS] = STATUS.NEW;
     row[COL.NOTE] = str_(req.note);
@@ -265,6 +264,7 @@ function monthSheetUrl_(period) {
 /** เติมคอลัมน์/หัวตารางที่ยังไม่มี (ชีตที่สร้างจากเวอร์ชันก่อนมี 22 คอลัมน์) */
 function ensureColumns_(sheet) {
   const n = HEADERS.length;
+  if (sheet.getMaxColumns() >= 14 && str_(sheet.getRange(1, 14).getValue()) === LEGACY_REIMB_HEADER) sheet.deleteColumn(14);   // v2.3 → v2.4: ลบ "สถานะเบิกคืน"
   if (sheet.getMaxColumns() < n) sheet.insertColumnsAfter(sheet.getMaxColumns(), n - sheet.getMaxColumns());
   const cur = sheet.getRange(1, 1, 1, n).getValues()[0];
   HEADERS.forEach((h, i) => { if (str_(cur[i]) !== h) sheet.getRange(1, i + 1).setValue(h); });
@@ -274,9 +274,10 @@ function ensureColumns_(sheet) {
 function readRows_(sheet) {
   const last = sheet.getLastRow();
   if (last < 2) return { values: [], rich: [] };
-  const nc = Math.min(HEADERS.length, sheet.getMaxColumns());
-  const values = sheet.getRange(2, 1, last - 1, nc).getValues().map(r => { while (r.length < HEADERS.length) r.push(''); return r; });
-  const rich = sheet.getRange(2, COL.PDF + 1, last - 1, 1).getRichTextValues();
+  const legacyReimb = sheet.getMaxColumns() >= 14 && str_(sheet.getRange(1, 14).getValue()) === LEGACY_REIMB_HEADER;   // ชีตเวอร์ชันก่อน (ยังมีคอลัมน์ N)
+  const nc = Math.min(HEADERS.length + (legacyReimb ? 1 : 0), sheet.getMaxColumns());
+  const values = sheet.getRange(2, 1, last - 1, nc).getValues().map(r => { if (legacyReimb) r.splice(13, 1); while (r.length < HEADERS.length) r.push(''); return r; });
+  const rich = sheet.getRange(2, COL.PDF + 1 + (legacyReimb ? 1 : 0), last - 1, 1).getRichTextValues();
   return { values: values, rich: rich };
 }
 
@@ -339,9 +340,8 @@ function recentFromScan_(entries, limit) { return entries.slice().sort((a, b) =>
 
 function summaryFromScan_(entries, period) {
   period = period || fmtDate_(new Date(), 'yyyy-MM');
-  const out = { period: period, total: 0, count: 0, noReceipt: 0, pendingReview: 0, returned: 0, byCat: {}, byUser: {}, pendingReimb: [] };
+  const out = { period: period, total: 0, count: 0, noReceipt: 0, pendingReview: 0, returned: 0, byCat: {}, byUser: {} };
   entries.forEach(e => {
-    if (e.reimb === REIMB.PENDING) out.pendingReimb.push({ id: e.id, date: e.date, by: e.by, vendor: e.vendor, amount: e.amount });
     if (e.period !== period) return;
     out.total = r2_(out.total + e.amount); out.count++;
     if (!e.hasReceipt) out.noReceipt = r2_(out.noReceipt + e.amount);
@@ -360,7 +360,7 @@ function rowToEntry_(r, rowIndex, link, sheetName) {
     sheet: sheetName || '', row: rowIndex, id: str_(r[COL.ID]), ts: t(r[COL.TS]), date: d(r[COL.DATE]), period: str_(r[COL.PERIOD]),
     by: str_(r[COL.BY]), fullName: str_(r[COL.FULLNAME]), dept: str_(r[COL.DEPT]),
     hasReceipt: str_(r[COL.RECEIPT]) === RECEIPT.YES, receipt: str_(r[COL.RECEIPT]), cat: str_(r[COL.CAT]), desc: str_(r[COL.DESC]),
-    vendor: str_(r[COL.VENDOR]), amount: num_(r[COL.AMOUNT]), pay: str_(r[COL.PAY]), reimb: str_(r[COL.REIMB]),
+    vendor: str_(r[COL.VENDOR]), amount: num_(r[COL.AMOUNT]), pay: str_(r[COL.PAY]),
     pdf: link ? link.url : '', pdfName: link ? link.name : '', pages: num_(r[COL.PAGES]),
     status: str_(r[COL.STATUS]), note: str_(r[COL.NOTE]), accNote: str_(r[COL.ACCNOTE]), approver: str_(r[COL.APPROVER]), coverType: str_(r[COL.COVER]), login: str_(r[COL.LOGIN]),
     slip: { type: str_(r[COL.STYPE]), payer: str_(r[COL.SPAYER]), payee: str_(r[COL.SPAYEE]), amount: num_(r[COL.SAMOUNT]), date: d(r[COL.SDATE]), time: str_(r[COL.STIME]), ref: str_(r[COL.SREF]), memo: str_(r[COL.SMEMO]), bank: str_(r[COL.SBANK]) },
@@ -435,7 +435,7 @@ function notify_(entry, s) {
     entry.id + ' · ' + entry.date + ' · บันทึกโดย ' + entry.by + (entry.fullName ? ' (' + entry.fullName + ')' : ''),
     entry.receipt + ' · ' + entry.cat,
     (entry.vendor ? entry.vendor + ' — ' : '') + entry.desc,
-    'จำนวนเงิน ' + money_(entry.amount) + ' บาท · จ่ายโดย ' + entry.pay + (entry.reimb === REIMB.PENDING ? ' (รอจ่ายคืน)' : ''),
+    'จำนวนเงิน ' + money_(entry.amount) + ' บาท · จ่ายโดย ' + entry.pay,
     'เอกสาร: ' + entry.pdfName + ' ' + entry.pdf,
   ];
   MailApp.sendEmail({ to: str_(s.NOTIFY_EMAIL), subject: '[TESR Ledger] ' + entry.id + ' · ' + entry.cat + ' · ' + money_(entry.amount) + ' บาท · ' + entry.by, body: lines.join('\n') + '\n\nเปิดชีต: ' + ss_().getUrl() });
@@ -447,11 +447,10 @@ function dailyDigest() {
   const today = fmtDate_(new Date(), 'yyyy-MM-dd');
   const all = scan_();
   const todays = all.filter(e => e.ts.indexOf(today) === 0);
-  const pendingReimb = all.filter(e => e.reimb === REIMB.PENDING);
   const pendingReview = all.filter(e => e.status === STATUS.NEW);
   const body = ['TESR Ledger — สรุปประจำวัน ' + today, 'บันทึกวันนี้ ' + todays.length + ' รายการ รวม ' + money_(todays.reduce((a, e) => a + e.amount, 0)) + ' บาท', '']
     .concat(todays.map(e => '• ' + e.id + ' ' + e.cat + ' ' + money_(e.amount) + ' (' + e.by + (e.hasReceipt ? '' : ', ไม่มีใบเสร็จ') + ')'))
-    .concat(['', 'รอตรวจทั้งหมด ' + pendingReview.length + ' รายการ · รอจ่ายคืนพนักงาน ' + pendingReimb.length + ' รายการ รวม ' + money_(pendingReimb.reduce((a, e) => a + e.amount, 0)) + ' บาท', '', 'เปิดชีต: ' + ss_().getUrl()]).join('\n');
+    .concat(['', 'รอตรวจทั้งหมด ' + pendingReview.length + ' รายการ', '', 'เปิดชีต: ' + ss_().getUrl()]).join('\n');
   MailApp.sendEmail({ to: str_(s.NOTIFY_EMAIL), subject: '[TESR Ledger] สรุปรายจ่ายวันที่ ' + today, body: body });
 }
 
@@ -544,16 +543,15 @@ function buildTemplate_() {
   const rows = Math.max(sh.getMaxRows() - 1, 1);
   const formats = []; for (let i = 0; i < rows; i++) formats.push(ROW_FORMATS);
   sh.getRange(2, 1, rows, n).setNumberFormats(formats);
-  [120, 130, 100, 70, 90, 170, 90, 150, 240, 300, 180, 120, 130, 100, 360, 70, 120, 220, 220, 150, 220, 220, 170, 200, 200, 120, 110, 80, 200, 220, 150, 260].forEach((w, i) => sh.setColumnWidth(i + 1, w));
-  sh.getRange('O2:O').setWrap(true);
+  [120, 130, 100, 70, 90, 170, 90, 150, 240, 300, 180, 120, 130, 360, 70, 120, 220, 220, 150, 220, 220, 170, 200, 200, 120, 110, 80, 200, 220, 150, 260].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  sh.getRange('N2:N').setWrap(true);
   const dvList = list => SpreadsheetApp.newDataValidation().requireValueInList(list, true).setAllowInvalid(true).build();
-  sh.getRange('Q2:Q').setDataValidation(dvList([STATUS.NEW, STATUS.CHECKED, STATUS.DONE, STATUS.RETURNED]));
-  sh.getRange('N2:N').setDataValidation(dvList([REIMB.NONE, REIMB.PENDING, REIMB.PAID]));
+  sh.getRange('P2:P').setDataValidation(dvList([STATUS.NEW, STATUS.CHECKED, STATUS.DONE, STATUS.RETURNED]));
   sh.getRange('M2:M').setDataValidation(dvList([PAY.COMPANY, PAY.PERSONAL]));
   const cf = (col, text, bg) => SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(text).setBackground(bg).setRanges([sh.getRange(col + '2:' + col)]).build();
   sh.setConditionalFormatRules([
-    cf('Q', STATUS.NEW, '#FFF1CC'), cf('Q', STATUS.RETURNED, '#F8D0D0'), cf('Q', STATUS.DONE, '#DCEFDC'),
-    cf('N', REIMB.PENDING, '#FFE2B8'), cf('H', RECEIPT.NO, '#F6E3E3'),
+    cf('P', STATUS.NEW, '#FFF1CC'), cf('P', STATUS.RETURNED, '#F8D0D0'), cf('P', STATUS.DONE, '#DCEFDC'),
+    cf('H', RECEIPT.NO, '#F6E3E3'),
   ]);
   sh.hideSheet();
   return sh;
@@ -571,23 +569,23 @@ function buildDashboard_() {
     ['รายจ่ายรวมในเดือน', '=IFERROR(SUM(' + M + 'L2:L")),0)'],
     ['จำนวนรายการ', '=IFERROR(COUNTA(' + M + 'A2:A")),0)'],
     ['ไม่มีใบเสร็จ (ใช้ใบปะหน้า)', '=IFERROR(SUMIF(' + M + 'H2:H"),"' + RECEIPT.NO + '",' + M + 'L2:L")),0)'],
-    ['รายการรอตรวจ', '=IFERROR(COUNTIF(' + M + 'Q2:Q"),"' + STATUS.NEW + '"),0)'],
-    ['รอจ่ายคืนพนักงาน (เดือนนี้)', '=IFERROR(SUMIF(' + M + 'N2:N"),"' + REIMB.PENDING + '",' + M + 'L2:L")),0)'],
+    ['รายการรอตรวจ', '=IFERROR(COUNTIF(' + M + 'P2:P"),"' + STATUS.NEW + '"),0)'],
+    ['จ่ายด้วยเงินส่วนตัว (พนักงานจ่ายไปก่อน)', '=IFERROR(SUMIF(' + M + 'M2:M"),"' + PAY.PERSONAL + '",' + M + 'L2:L")),0)'],
   ];
   kpis.forEach((k, i) => { sh.getRange(4 + i, 1).setValue(k[0]); sh.getRange(4 + i, 2).setFormula(k[1]); });
   sh.getRange('B4:B8').setNumberFormat('#,##0.00').setFontWeight('bold');
   sh.getRange('B5').setNumberFormat('0'); sh.getRange('B7').setNumberFormat('0');
 
   sh.getRange('D3').setValue('ตามหมวดหมู่ (เดือนที่เลือก)').setFontWeight('bold');
-  sh.getRange('D4').setFormula('=IFERROR(QUERY(' + M + 'A2:V"),"select I, count(A), sum(L) where A is not null group by I order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในเดือนนี้")');
+  sh.getRange('D4').setFormula('=IFERROR(QUERY(' + M + 'A2:U"),"select I, count(A), sum(L) where A is not null group by I order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในเดือนนี้")');
   sh.getRange('F4:F30').setNumberFormat('#,##0.00');
   sh.getRange('H3').setValue('ตามผู้บันทึก (เดือนที่เลือก)').setFontWeight('bold');
-  sh.getRange('H4').setFormula('=IFERROR(QUERY(' + M + 'A2:V"),"select E, count(A), sum(L) where A is not null group by E order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในเดือนนี้")');
+  sh.getRange('H4').setFormula('=IFERROR(QUERY(' + M + 'A2:U"),"select E, count(A), sum(L) where A is not null group by E order by sum(L) desc label count(A) \'\', sum(L) \'\'",0),"ยังไม่มีรายการในเดือนนี้")');
   sh.getRange('J4:J30').setNumberFormat('#,##0.00');
 
-  sh.getRange('A11').setValue('รอจ่ายคืนพนักงาน (เดือนที่เลือก)').setFontWeight('bold');
+  sh.getRange('A11').setValue('รายการรอตรวจ (เดือนที่เลือก)').setFontWeight('bold');
   sh.getRange('A12:E12').setValues([['ID', 'วันที่จ่าย', 'ผู้บันทึก', 'รายละเอียด', 'จำนวนเงิน']]).setFontWeight('bold').setBackground('#000000').setFontColor('#C9A84C');
-  sh.getRange('A13').setFormula('=IFERROR(QUERY(' + M + 'A2:V"),"select A,C,E,J,L where N=\'' + REIMB.PENDING + '\' order by C",0),"ไม่มีรายการรอจ่ายคืน")');
+  sh.getRange('A13').setFormula('=IFERROR(QUERY(' + M + 'A2:U"),"select A,C,E,J,L where P=\'' + STATUS.NEW + '\' order by C",0),"ไม่มีรายการรอตรวจ")');
   sh.getRange('B13:B').setNumberFormat('yyyy-mm-dd');
   sh.getRange('E13:E').setNumberFormat('#,##0.00');
   [260, 140, 20, 260, 70, 120, 20, 140, 70, 120, 20, 110, 120, 70, 90, 120, 60].forEach((w, i) => sh.setColumnWidth(i + 1, w));
@@ -602,9 +600,9 @@ function refreshDashboardMonths_() {
   const months = monthSheets_().reverse();                    // ใหม่ → เก่า
   sh.getRange('L3:Q60').clearContent();
   sh.getRange('L3').setValue('ทุกเดือน').setFontWeight('bold');
-  sh.getRange('L4:Q4').setValues([['เดือน', 'รายจ่ายรวม', 'รายการ', 'รอตรวจ', 'รอจ่ายคืน', 'ชีต']]).setFontWeight('bold').setBackground('#000000').setFontColor('#C9A84C');
+  sh.getRange('L4:Q4').setValues([['เดือน', 'รายจ่ายรวม', 'รายการ', 'รอตรวจ', 'ไม่มีใบเสร็จ', 'ชีต']]).setFontWeight('bold').setBackground('#000000').setFontColor('#C9A84C');
   if (months.length) {
-    const rows = months.map(m => { const R = "'" + m.getName() + "'!"; return [m.getName(), '=SUM(' + R + 'L2:L)', '=COUNTA(' + R + 'A2:A)', '=COUNTIF(' + R + 'Q2:Q,"' + STATUS.NEW + '")', '=SUMIF(' + R + 'N2:N,"' + REIMB.PENDING + '",' + R + 'L2:L)', '=HYPERLINK("#gid=' + m.getSheetId() + '","เปิด")']; });
+    const rows = months.map(m => { const R = "'" + m.getName() + "'!"; return [m.getName(), '=SUM(' + R + 'L2:L)', '=COUNTA(' + R + 'A2:A)', '=COUNTIF(' + R + 'P2:P,"' + STATUS.NEW + '")', '=SUMIF(' + R + 'H2:H,"' + RECEIPT.NO + '",' + R + 'L2:L)', '=HYPERLINK("#gid=' + m.getSheetId() + '","เปิด")']; });
     sh.getRange(5, 12, rows.length, 6).setValues(rows);
     sh.getRange(5, 13, rows.length, 1).setNumberFormat('#,##0.00'); sh.getRange(5, 16, rows.length, 1).setNumberFormat('#,##0.00');
     sh.getRange(5, 14, rows.length, 2).setNumberFormat('0');
@@ -636,9 +634,9 @@ function refreshRegister_() {
   const months = monthSheets_();
   const A2 = sh.getRange('A2');
   if (!months.length) { A2.setValue('ยังไม่มีชีตเดือน — รายการแรกที่บันทึกจะปรากฏที่นี่'); return; }
-  const src = '{' + months.map(m => "'" + m.getName() + "'!A2:AF").join(';') + '}';
-  // Col1=ID Col5=ผู้บันทึก Col9=หมวดหมู่ Col13=จ่ายโดย Col17=สถานะบัญชี Col23..Col31=ข้อมูลสลิป Col32=ลิงก์ PDF
-  A2.setFormula('=IFERROR(QUERY(' + src + ',"select Col1,Col5,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col9,Col17 where Col1 is not null and Col13 = \'' + PAY.COMPANY + '\' order by Col27 desc, Col1 desc",0),"ยังไม่มีรายการที่บริษัทโอนเงินออก")');
+  const src = '{' + months.map(m => "'" + m.getName() + "'!A2:AE").join(';') + '}';
+  // Col1=ID Col5=ผู้บันทึก Col9=หมวดหมู่ Col13=จ่ายโดย Col16=สถานะบัญชี Col22..Col30=ข้อมูลสลิป Col31=ลิงก์ PDF
+  A2.setFormula('=IFERROR(QUERY(' + src + ',"select Col1,Col5,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col9,Col16 where Col1 is not null and Col13 = \'' + PAY.COMPANY + '\' order by Col26 desc, Col1 desc",0),"ยังไม่มีรายการที่บริษัทโอนเงินออก")');
 }
 
 function styleHeader_(sh, n) {
