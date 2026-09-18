@@ -77,6 +77,19 @@ async function evidencePages(m, startNo) {
 }
 
 /* ---------- preview + PDF ---------- */
+/** ไฟล์ PDF ที่แนบ แบ่งเป็น 2 กลุ่ม: ใบเสร็จ (ขึ้นหน้าแรกเสมอเมื่อมีใบเสร็จ) และที่เหลือ (ต่อท้าย) */
+function pdfGroups(m) {
+  const of = g => m.files[g].filter(f => f.kind === 'pdf');
+  const head = m.hasReceipt ? of('receipt') : [];
+  const tail = [].concat(m.hasReceipt ? [] : of('receipt'), of('pay'), of('fx'), of('other'));
+  return { head: head, tail: tail };
+}
+async function pdfPageCount(f) {
+  if (f.pdfPages) return f.pdfPages;
+  try { const src = await PDFLib.PDFDocument.load(Uint8Array.from(atob(f.data), c => c.charCodeAt(0)), { ignoreEncryption: true }); f.pdfPages = src.getPageCount(); }
+  catch (e) { f.pdfPages = 0; }
+  return f.pdfPages;
+}
 async function buildPreview() {
   const m = model(); state.model = m;
   $('summ').innerHTML = [['ผู้บันทึก', esc(m.who.nick) + (m.who.fullName ? ' — ' + esc(m.who.fullName) : '') + (m.who.dept ? ' (' + esc(m.who.dept) + ')' : '')], ['ประเภท', m.hasReceipt ? 'มีใบเสร็จ' : 'ไม่มีใบเสร็จ — ใบปะหน้า'], ['หมวดหมู่ / โฟลเดอร์', esc(m.cat.folder)], ['วันที่จ่าย', thDateLong(m.date)], ['จำนวนเงิน', '<b class="mono">' + money(m.amount) + ' บาท</b>'], ['จ่ายด้วย', esc(m.pay)], ['รายละเอียด', esc(m.desc || '—')], ['ผู้อนุมัติ', esc(m.approver.fullName || m.approver.nick)]].map(r => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
@@ -88,14 +101,17 @@ async function buildPreview() {
   $('btnOpenPdf').hidden = true; $('btnMakePdf').hidden = false; state.pdf = null;
   const pv = $('pv'); pv.innerHTML = '<div class="cap"><span class="spin"></span>กำลังจัดหน้าเอกสาร…</div>';
   try {
+    const g = pdfGroups(m);
+    let headPages = 0; for (const f of g.head) headPages += await pdfPageCount(f);      // ใบเสร็จที่เป็น PDF อยู่หน้าแรกเสมอ
     const pages = [];
     if (!m.hasReceipt) pages.push({ canvas: await renderCoverCanvas(m), label: 'ใบปะหน้า' });
-    (await evidencePages(m, pages.length + 1)).forEach(p => pages.push({ canvas: p.canvas, label: 'หลักฐาน' }));
+    (await evidencePages(m, headPages + pages.length + 1)).forEach(p => pages.push({ canvas: p.canvas, label: 'หลักฐาน' }));
     state.pages = pages;
-    const pdfs = [].concat(m.files.receipt, m.files.pay, m.files.fx, m.files.other).filter(f => f.kind === 'pdf');
-    pv.innerHTML = pages.map((p, i) => '<div class="pg"><img class="pgimg" src="' + p.canvas.toDataURL('image/jpeg', 0.6) + '" alt=""></div><div class="cap">หน้า ' + (i + 1) + ' · ' + p.label + '</div>').join('') +
-      pdfs.map(f => '<div class="pg pgpdf">📄 ไฟล์ PDF ที่แนบ: ' + esc(f.name) + '<br><small>จะต่อท้ายเป็นหน้าถัดไปในไฟล์ PDF</small></div>').join('');
-    $('summ').insertAdjacentHTML('beforeend', '<dt>เอกสาร PDF</dt><dd>' + pages.length + ' หน้า' + (pdfs.length ? ' + PDF แนบ ' + pdfs.length + ' ไฟล์' : '') + '</dd>');
+    pv.innerHTML = g.head.map(f => '<div class="pg pgpdf">📄 ใบเสร็จ (PDF): ' + esc(f.name) + '<br><small>' + (f.pdfPages || '?') + ' หน้า — เป็นหน้าแรกของเอกสาร</small></div>').join('') +
+      pages.map((p, i) => '<div class="pg"><img class="pgimg" src="' + p.canvas.toDataURL('image/jpeg', 0.6) + '" alt=""></div><div class="cap">หน้า ' + (headPages + i + 1) + ' · ' + p.label + '</div>').join('') +
+      g.tail.map(f => '<div class="pg pgpdf">📄 ไฟล์ PDF ที่แนบ: ' + esc(f.name) + '<br><small>จะต่อท้ายเป็นหน้าถัดไปในไฟล์ PDF</small></div>').join('');
+    const nPdf = g.head.length + g.tail.length;
+    $('summ').insertAdjacentHTML('beforeend', '<dt>เอกสาร PDF</dt><dd>' + (headPages + pages.length) + ' หน้า' + (nPdf ? ' + PDF แนบ ' + nPdf + ' ไฟล์' : '') + (g.head.length ? ' · ใบเสร็จ PDF อยู่หน้าแรก' : '') + '</dd>');
   } catch (e) { pv.innerHTML = '<div class="cap">จัดหน้าไม่สำเร็จ: ' + esc(e.message) + '</div>'; }
 }
 async function buildPdf() {
@@ -104,15 +120,17 @@ async function buildPdf() {
   const { PDFDocument } = PDFLib;
   const doc = await PDFDocument.create();
   doc.setTitle('TESR Ledger — ' + (state.model.who.nick) + ' ' + state.model.date); doc.setProducer('TESR Ledger'); doc.setCreator('TESR Ledger');
-  for (const p of state.pages) {
+  const appendPdf = async f => {
+    try { const src = await PDFDocument.load(Uint8Array.from(atob(f.data), c => c.charCodeAt(0)), { ignoreEncryption: true }); const pages = await doc.copyPages(src, src.getPageIndices()); pages.forEach(pg => doc.addPage(pg)); }
+    catch (e) { toast('ต่อไฟล์ PDF "' + f.name + '" ไม่ได้ — ข้ามไฟล์นี้', 'err'); }
+  };
+  const g = pdfGroups(state.model);
+  for (const f of g.head) await appendPdf(f);                       // 1) ใบเสร็จที่เป็น PDF — หน้าแรกเสมอ
+  for (const p of state.pages) {                                      // 2) หน้าที่แอปวาด (ใบปะหน้า / รูปใบเสร็จ / สลิป / หลักฐานอื่น)
     const jpg = await doc.embedJpg(p.canvas.toDataURL('image/jpeg', 0.85));
     const page = doc.addPage([595.28, 841.89]); page.drawImage(jpg, { x: 0, y: 0, width: 595.28, height: 841.89 });
   }
-  const pdfs = [].concat(state.model.files.receipt, state.model.files.pay, state.model.files.fx, state.model.files.other).filter(f => f.kind === 'pdf');
-  for (const f of pdfs) {
-    try { const src = await PDFDocument.load(Uint8Array.from(atob(f.data), c => c.charCodeAt(0)), { ignoreEncryption: true }); const pages = await doc.copyPages(src, src.getPageIndices()); pages.forEach(pg => doc.addPage(pg)); }
-    catch (e) { toast('ต่อไฟล์ PDF "' + f.name + '" ไม่ได้ — ข้ามไฟล์นี้', 'err'); }
-  }
+  for (const f of g.tail) await appendPdf(f);                       // 3) PDF อื่น ๆ ที่แนบ ต่อท้าย
   const b64 = await doc.saveAsBase64();
   state.pdf = { data: b64, pages: doc.getPageCount() };
   const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
