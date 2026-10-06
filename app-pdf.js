@@ -60,13 +60,14 @@ async function evidencePages(m, startNo) {
     for (let i = 0; i < list.length; i++) {
       const f = list[i]; const img = await loadImg(f.preview);
       const cap = 26, capH = 34, maxW = W - 2 * M;
-      const fit = availH => { let s = Math.min(maxW / img.width, (availH - capH) / img.height); if (s > 1.2) s = 1.2; return { w: img.width * s, h: img.height * s }; };
+      const fit = availH => { const s = Math.min(maxW / img.width, (availH - capH) / img.height); return { w: img.width * s, h: img.height * s }; };   // ขยายให้เต็มหน้าเสมอ (ไม่จำกัดที่ขนาดจริง)
       if (!pg || pg.used) newPage(!pg);                     // หลักฐานแต่ละรูปได้หน้าเต็มของตัวเอง ไม่เบียดกัน
       pg.used = true;
       const avail = H - M - y; const d = fit(avail);
       const x = pg.ctx;
-      x.fillStyle = '#000'; x.font = font(cap, true); x.fillText(label + ' ' + (i + 1) + (list.length > 1 ? '/' + list.length : ''), M, y + cap - 4);
-      x.font = font(18, false); x.fillStyle = '#666'; x.fillText(clip(x, f.name, 500), M + 300, y + cap - 4);
+      x.fillStyle = '#000'; x.font = font(cap, true); const labelText = label + ' ' + (i + 1) + (list.length > 1 ? '/' + list.length : ''); x.fillText(labelText, M, y + cap - 4);
+      const labelW = x.measureText(labelText).width;
+      x.font = font(18, false); x.fillStyle = '#666'; x.textAlign = 'right'; x.fillText(clip(x, f.name, Math.max(0, maxW - labelW - 24)), W - M, y + cap - 4); x.textAlign = 'left';   // ชื่อไฟล์ชิดขวา ไม่ทับป้าย
       y += capH;
       const dx = M + (maxW - d.w) / 2; x.drawImage(img, dx, y, d.w, d.h); x.strokeStyle = '#ddd'; x.strokeRect(dx, y, d.w, d.h);
       y += d.h + 30; idx++;
