@@ -61,9 +61,9 @@ async function evidencePages(m, startNo) {
       const f = list[i]; const img = await loadImg(f.preview);
       const cap = 26, capH = 34, maxW = W - 2 * M;
       const fit = availH => { let s = Math.min(maxW / img.width, (availH - capH) / img.height); if (s > 1.2) s = 1.2; return { w: img.width * s, h: img.height * s }; };
-      if (!pg) newPage(true);
-      let avail = H - M - y; let d = fit(avail);
-      if (d.h < Math.min(img.height * 0.35, 380) && y > M + 130) { newPage(false); avail = H - M - y; d = fit(avail); }
+      if (!pg || pg.used) newPage(!pg);                     // หลักฐานแต่ละรูปได้หน้าเต็มของตัวเอง ไม่เบียดกัน
+      pg.used = true;
+      const avail = H - M - y; const d = fit(avail);
       const x = pg.ctx;
       x.fillStyle = '#000'; x.font = font(cap, true); x.fillText(label + ' ' + (i + 1) + (list.length > 1 ? '/' + list.length : ''), M, y + cap - 4);
       x.font = font(18, false); x.fillStyle = '#666'; x.fillText(clip(x, f.name, 500), M + 300, y + cap - 4);
