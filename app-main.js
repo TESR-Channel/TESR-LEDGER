@@ -63,7 +63,7 @@ function bind() {
   $('btnSettings').onclick = openSettings; $('btnSaveSettings').onclick = saveSettings; $('btnTest').onclick = testConnection; $('btnClearLocal').onclick = () => ask('ล้างข้อมูลในเครื่อง', 'จะลบ URL, รหัส, ชื่อที่จำไว้ และลายเซ็นที่วาดไว้ในเครื่องนี้', 'ล้าง').then(ok => { if (ok) clearLocal(); });
   $('btnReload').onclick = () => loadData(true);
   $('btnLogout').onclick = logout;
-  $('hdrLogo').src = LOGO_DATA; $('gateLogo').src = LOGO_DATA; $('favicon').href = LOGO_DATA;
+  $('hdrLogo').src = LOGO_DATA; $('gateLogo').src = LOGO_DATA;
   $$('.ov').forEach(o => o.addEventListener('click', ev => { if (ev.target === o && o.id !== 'ovAsk') closeOv(o.id); }));
   ['oName', 'oDept'].forEach(id => $(id).oninput = () => { renderNav(); if (id === 'oName') renderSig(); });
   $('btnSigDraw').onclick = () => { $('sigPadWrap').classList.remove('hidden'); $('sigHave').classList.add('hidden'); setTimeout(padInit, 30); };
